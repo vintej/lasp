@@ -284,6 +284,7 @@ reset() ->
 
 -spec propagate(id()) -> ok.
 propagate(Id) ->
+    lager:error("LASPVIN distribution backend tabcount ~p~n", [ets:last(tabcount)]),
     gen_server:call(?MODULE, {propagate, Id}, infinity).
 
 %%%===================================================================
@@ -300,6 +301,9 @@ init([]) ->
     lasp_config:set(actor, Actor),
 
     Identifier = lasp_support:mynode(),
+
+    %Initialize propagation counter
+    
 
     %% Start the storage backend.
     {ok, Store} = case lasp_storage_backend:start_link(Identifier) of

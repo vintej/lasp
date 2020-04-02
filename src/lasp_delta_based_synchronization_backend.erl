@@ -62,10 +62,18 @@ extract_log_type_and_payload({delta_ack, Node, Id, Counter}) ->
 %% @doc Start and link to calling process.
 -spec start_link(list())-> {ok, pid()} | ignore | {error, term()}.
 start_link(Opts) ->
+    lager:error("LASPVIN Start_link"),
     gen_server:start_link({local, ?MODULE}, ?MODULE, Opts, []).
 
 propagate(ObjectFilterFun) ->
+    lager:error("LASPVIN coming to propagate"),
     gen_server:call(?MODULE, {propagate, ObjectFilterFun}, infinity).
+    %lager:error("LASPVIN tabcount ~p~n", [ets:last(tabcount)]),
+    %ets:insert(tabcount,{(ets:last(tabcount))+1}),
+    %case ets:last(tabcount) rem 3 == 0 of
+        %true -> lager:error("LASPVIN doing gen_call tabcount ~p~n:",[ets:last(tabcount)]), gen_server:call(?MODULE, {propagate, ObjectFilterFun}, infinity);
+        %false -> lager:error("LASPVIN skipping gen_call tabcount ~p~n:",[ets:last(tabcount)])
+    %end.
 
 %%%===================================================================
 %%% gen_server callbacks
@@ -76,7 +84,9 @@ propagate(ObjectFilterFun) ->
 init([Store, Actor]) ->
     %% Seed the process at initialization.
     ?SYNC_BACKEND:seed(),
-
+    ets:new(tabcount, [ordered_set, named_table, public]),
+    ets:insert(tabcount,{0}),
+    lager:error("LASPVIN coming to iNIT"),
     schedule_delta_synchronization(),
     schedule_delta_garbage_collection(),
 
@@ -94,10 +104,15 @@ handle_call({propagate, ObjectFilterFun}, _From, State) ->
     Peers = ?SYNC_BACKEND:compute_exchange(?SYNC_BACKEND:without_me(Members)),
 
     %% Transmit updates.
-    lists:foreach(fun(Peer) ->
+    lager:error("LASPVIN transmitting updates from handle_call tabcount:~p~n",[ets:last(tabcount)]),
+    ets:insert(tabcount,{(ets:last(tabcount))+1}),
+    case ets:last(tabcount) rem 3 == 0 of
+        true -> lists:foreach(fun(Peer) ->
+                          lager:error("LASPVIN coming to LISTS"),
                           init_delta_sync(Peer, ObjectFilterFun) end,
-                  Peers),
-
+                  Peers);
+        false -> lager:error("LASPVIN skipping lists delta_sync")
+    end,
     {reply, ok, State};
 
 
@@ -112,12 +127,14 @@ handle_cast({delta_exchange, Peer, ObjectFilterFun},
     lasp_marathon_simulations:log_message_queue_size("delta_exchange"),
 
     lasp_logger:extended("Exchange starting for ~p", [Peer]),
+    lager:error("LASPVIN Coming to handle_cast simulation marathon"),
 
     Mutator = fun({Id, #dv{value=Value, type=Type, metadata=Metadata,
                            delta_counter=Counter, delta_map=DeltaMap,
                            delta_ack_map=AckMap0}=Object}) ->
         case ObjectFilterFun(Id, Metadata) of
             true ->
+                lager:error("LASPVIN Coming to ObjectFilterFun"),
                 Ack = case orddict:find(Peer, AckMap0) of
                     {ok, {Ack0, _GCCounter}} ->
                         Ack0;
@@ -131,6 +148,7 @@ handle_cast({delta_exchange, Peer, ObjectFilterFun},
                     true ->
                         Value;
                     false ->
+                        lager:error("LASPVIN Collecting deltas"),
                         collect_deltas(Peer, Type, DeltaMap, Ack, Counter)
                 end,
 
@@ -140,16 +158,17 @@ handle_cast({delta_exchange, Peer, ObjectFilterFun},
 
                 AckMap = case Ack < Counter orelse ClientInReactiveMode of
                     true ->
+                        lager:error("LASPVIN Syncing backend tabcount ~p~n", [ets:last(tabcount)]),
+                        %ets:insert(tabcount,{(ets:last(tabcount))+1}),
                         ?SYNC_BACKEND:send(?MODULE, {delta_send, lasp_support:mynode(), {Id, Type, Metadata, Deltas}, Counter}, Peer),
-
                         orddict:map(
                             fun(Peer0, {Ack0, GCCounter0}) ->
-                                case Peer0 of
-                                    Peer ->
-                                        {Ack0, GCCounter0 + 1};
-                                    _ ->
-                                        {Ack0, GCCounter0}
-                                end
+                               case Peer0 of
+                                   Peer ->
+                                       {Ack0, GCCounter0 + 1};
+                                   _ ->
+                                       {Ack0, GCCounter0}
+                               end
                             end,
                             AckMap0
                         );
@@ -165,7 +184,7 @@ handle_cast({delta_exchange, Peer, ObjectFilterFun},
 
     %% TODO: Should this be parallel?
     {ok, _} = lasp_storage_backend:update_all(Store, Mutator),
-
+    lager:error("LASPVIN Exchange finished"),
     lasp_logger:extended("Exchange finished for ~p", [Peer]),
 
     {noreply, State};
@@ -173,7 +192,7 @@ handle_cast({delta_exchange, Peer, ObjectFilterFun},
 handle_cast({delta_send, From, {Id, Type, _Metadata, Deltas}, Counter},
             #state{store=Store, actor=Actor}=State) ->
     lasp_marathon_simulations:log_message_queue_size("delta_send"),
-
+    lager:error("LASPVIN Doing delta_receive"),
     {Time, _Value} = timer:tc(fun() ->
                     ?CORE:receive_delta(Store, {delta_send,
                                                 From,
@@ -187,6 +206,7 @@ handle_cast({delta_send, From, {Id, Type, _Metadata, Deltas}, Counter},
     ?SYNC_BACKEND:send(?MODULE, {delta_ack, lasp_support:mynode(), Id, Counter}, From),
 
     %% Send back just the updated state for the object received.
+    lager:error("LASPVIN Sending updated state"),
     case ?SYNC_BACKEND:client_server_mode() andalso
          ?SYNC_BACKEND:i_am_server() andalso ?SYNC_BACKEND:reactive_server() of
         true ->
@@ -202,7 +222,7 @@ handle_cast({delta_send, From, {Id, Type, _Metadata, Deltas}, Counter},
 
 handle_cast({delta_ack, From, Id, Counter}, #state{store=Store}=State) ->
     lasp_marathon_simulations:log_message_queue_size("delta_ack"),
-
+    lager:error("LASPVIN Receving delta in handle_cast"),
     ?CORE:receive_delta(Store, {delta_ack, Id, From, Counter}),
     {noreply, State};
 
@@ -218,7 +238,7 @@ handle_info(delta_sync, #state{}=State) ->
     lasp_marathon_simulations:log_message_queue_size("delta_sync"),
 
     lasp_logger:extended("Beginning delta synchronization."),
-
+    lager:error("LASPVIN doing delta_synchronization"),
     %% Get the active set from the membership protocol.
     {ok, Members} = ?SYNC_BACKEND:membership(),
 
@@ -236,6 +256,7 @@ handle_info(delta_sync, #state{}=State) ->
                   Peers),
 
     %% Synchronize convergence structure.
+    lager:error("LASPVIN synchronization of convergence structure"),
     FilterWithConvergenceFun = fun(Id, _) ->
                               Id =:= ?SIM_STATUS_STRUCTURE
                       end,
@@ -250,7 +271,7 @@ handle_info(delta_sync, #state{}=State) ->
 
 handle_info(delta_gc, #state{store=Store}=State) ->
     lasp_marathon_simulations:log_message_queue_size("delta_gc"),
-
+    
     MaxGCCounter = lasp_config:get(delta_mode_max_gc_counter,
                                    ?MAX_GC_COUNTER),
 
@@ -278,7 +299,7 @@ handle_info(delta_gc, #state{store=Store}=State) ->
 
         {Object#dv{delta_map=DeltaMapGC, delta_ack_map=PrunedAckMap}, Id}
     end,
-
+    lager:error("LASPVIN doing lasp_storage_backend update_all"),
     {ok, _} = lasp_storage_backend:update_all(Store, Mutator),
 
     %% Schedule next GC and reset counter.
@@ -355,6 +376,7 @@ schedule_delta_garbage_collection() ->
 
 %% @private
 init_delta_sync(Peer, ObjectFilterFun) ->
+    lager:error("LASPVIN init_delta_sync"),
     gen_server:cast(?MODULE, {delta_exchange, Peer, ObjectFilterFun}).
 
 %% @private
