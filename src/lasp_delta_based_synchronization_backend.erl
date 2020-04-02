@@ -206,14 +206,19 @@ handle_cast({delta_send, From, {Id, Type, _Metadata, Deltas}, Counter},
     ?SYNC_BACKEND:send(?MODULE, {delta_ack, lasp_support:mynode(), Id, Counter}, From),
 
     %% Send back just the updated state for the object received.
-    lager:error("LASPVIN Sending updated state"),
+    lager:error("LASPVIN Sending updated state tabcount ~p~n",[ets:last(tabcount)]),
     case ?SYNC_BACKEND:client_server_mode() andalso
          ?SYNC_BACKEND:i_am_server() andalso ?SYNC_BACKEND:reactive_server() of
         true ->
-            ObjectFilterFun = fun(Id1, _) ->
-                                      Id =:= Id1
-                              end,
-            init_delta_sync(From, ObjectFilterFun);
+            case ets:last(tabcount) rem 3 == 0 of
+               true ->   
+                   ObjectFilterFun = fun(Id1, _) ->
+                                             Id =:= Id1
+                                     end,
+                   init_delta_sync(From, ObjectFilterFun);
+               false ->
+                   lager:error("LASPVIN Skipping init_delta")
+            end;
         false ->
             ok
     end,
@@ -377,7 +382,10 @@ schedule_delta_garbage_collection() ->
 %% @private
 init_delta_sync(Peer, ObjectFilterFun) ->
     lager:error("LASPVIN init_delta_sync"),
-    gen_server:cast(?MODULE, {delta_exchange, Peer, ObjectFilterFun}).
+    case ets:last(tabcount) rem 3 == 0 of
+        true -> lager:error("LASPVIN allowing to do gen_server:cast"), gen_server:cast(?MODULE, {delta_exchange, Peer, ObjectFilterFun});
+        false -> lager:error("LASPVIN skipping init_delta_sync gen_server:cast")
+    end.
 
 %% @private
 lists_min([]) -> 0;
