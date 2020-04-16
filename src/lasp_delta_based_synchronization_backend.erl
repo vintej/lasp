@@ -99,6 +99,7 @@ handle_call({propagate, ObjectFilterFun}, _From, State) ->
 
     %% Transmit updates.
     %lager:error("LASPVIN transmitting updates from handle_call tabcount:~p~n",[ets:last(tabcount)]),
+    lager:error("LASPVIN handle_call propagate"),
     ets:insert(tabcount,{(ets:last(tabcount))+1}),
     lists:foreach(fun(Peer) ->
                           init_delta_sync(Peer, ObjectFilterFun) end,
@@ -119,7 +120,7 @@ handle_cast({delta_exchange, Peer, ObjectFilterFun},
 
     lasp_logger:extended("Exchange starting for ~p", [Peer]),
     %lager:error("LASPVIN Coming to handle_cast simulation marathon"),
-
+    lager:error("LASPVIN handle_cast delta_exchange simulation marathon"),
     Mutator = fun({Id, #dv{value=Value, type=Type, metadata=Metadata,
                            delta_counter=Counter, delta_map=DeltaMap,
                            delta_ack_map=AckMap0}=Object}) ->
@@ -174,7 +175,7 @@ handle_cast({delta_exchange, Peer, ObjectFilterFun},
 
     %% TODO: Should this be parallel?
     {ok, _} = lasp_storage_backend:update_all(Store, Mutator),
-    %lager:error("LASPVIN Exchange finished"),
+    lager:error("LASPVIN Exchange finished"),
     lasp_logger:extended("Exchange finished for ~p", [Peer]),
 
     {noreply, State};
@@ -182,7 +183,7 @@ handle_cast({delta_exchange, Peer, ObjectFilterFun},
 handle_cast({delta_send, From, {Id, Type, _Metadata, Deltas}, Counter},
             #state{store=Store, actor=Actor}=State) ->
     lasp_marathon_simulations:log_message_queue_size("delta_send"),
-    %lager:error("LASPVIN Doing delta_receive"),
+    lager:error("LASPVIN handle_cast delta_send lasp_marathon_simulations delta send"),
     {Time, _Value} = timer:tc(fun() ->
                     ?CORE:receive_delta(Store, {delta_send,
                                                 From,
@@ -203,6 +204,7 @@ handle_cast({delta_send, From, {Id, Type, _Metadata, Deltas}, Counter},
             ObjectFilterFun = fun(Id1, _) ->
                                       Id =:= Id1
                               end,
+            lager:error("LASPVIN doing init_delta_sync from handle_cast delta_send"),
             init_delta_sync(From, ObjectFilterFun);
         false ->
             ok
@@ -228,7 +230,7 @@ handle_info(delta_sync, #state{}=State) ->
     lasp_marathon_simulations:log_message_queue_size("delta_sync"),
 
     lasp_logger:extended("Beginning delta synchronization."),
-    %lager:error("LASPVIN doing delta_synchronization"),
+    lager:error("LASPVIN doing delta_synchronization"),
     %% Get the active set from the membership protocol.
     {ok, Members} = ?SYNC_BACKEND:membership(),
 
@@ -289,7 +291,7 @@ handle_info(delta_gc, #state{store=Store}=State) ->
 
         {Object#dv{delta_map=DeltaMapGC, delta_ack_map=PrunedAckMap}, Id}
     end,
-    %lager:error("LASPVIN doing lasp_storage_backend update_all"),
+    lager:error("LASPVIN doing lasp_storage_backend update_all"),
     {ok, _} = lasp_storage_backend:update_all(Store, Mutator),
 
     %% Schedule next GC and reset counter.
@@ -345,6 +347,8 @@ schedule_delta_synchronization() ->
               )
             ),
 
+    lager:error("LASPVIN inside schedule_delta_synchronization"),
+
     case ShouldDeltaSync of
         true ->
             Interval = lasp_config:get(delta_interval, 10000),
@@ -366,15 +370,16 @@ schedule_delta_garbage_collection() ->
 
 %% @private
 init_delta_sync(Peer, ObjectFilterFun) ->
-    %lager:error("LASPVIN init_delta_sync"),
-    case ets:last(tabcount) rem 3 == 0 of
-        true -> 
-            %lager:error("LASPVIN allowing to do gen_server:cast"), 
-            gen_server:cast(?MODULE, {delta_exchange, Peer, ObjectFilterFun});
-        false -> 
-            %lager:error("LASPVIN skipping init_delta_sync gen_server:cast")
-            ok
-    end.
+    lager:error("LASPVIN init_delta_sync"),
+    gen_server:cast(?MODULE, {delta_exchange, Peer, ObjectFilterFun}).
+    %case ets:last(tabcount) rem 3 == 0 of
+    %    true -> 
+    %        %lager:error("LASPVIN allowing to do gen_server:cast"), 
+    %        gen_server:cast(?MODULE, {delta_exchange, Peer, ObjectFilterFun});
+    %    false -> 
+    %        %lager:error("LASPVIN skipping init_delta_sync gen_server:cast")
+    %        ok
+    %end.
 
 %% @private
 lists_min([]) -> 0;
