@@ -96,16 +96,16 @@ handle_call({propagate, ObjectFilterFun}, _From, State) ->
 
     %% Remove ourself and compute exchange peers.
     Peers = ?SYNC_BACKEND:compute_exchange(?SYNC_BACKEND:without_me(Members)),
-    lager:error("LASPVIN Peers: ~p~n",[Peers]),
+    %lager:error("LASPVIN Peers: ~p~n",[Peers]),
     %% Transmit updates.
     %lager:error("LASPVIN transmitting updates from handle_call tabcount:~p~n",[ets:last(tabcount)]),
     lager:error("LASPVIN handle_call propagate"),
-    ets:insert(tabcount,{(ets:last(tabcount))+1}),
-    %lists:foreach(fun(Peer) ->
-    %                      init_delta_sync(Peer, ObjectFilterFun) end,
-    %              Peers),
-    init_delta_sync('c@10.0.0.252', ObjectFilterFun),
-    lager:error("LASPVIN Skipped doing to just C init_delta_sync from handle_call objectfilterfun ~p~n", [ObjectFilterFun]),
+    %ets:insert(tabcount,{(ets:last(tabcount))+1}),
+    lists:foreach(fun(Peer) ->
+                          init_delta_sync(Peer, ObjectFilterFun) end,
+                  Peers),
+    %init_delta_sync('c@10.0.0.252', ObjectFilterFun),
+    %lager:error("LASPVIN Skipped doing to just C init_delta_sync from handle_call objectfilterfun ~p~n", [ObjectFilterFun]),
     {reply, ok, State};
 
 
@@ -205,7 +205,7 @@ handle_cast({delta_send, From, {Id, Type, _Metadata, Deltas}, Counter},
             ObjectFilterFun = fun(Id1, _) ->
                                       Id =:= Id1
                               end,
-            lager:error("LASPVIN doing init_delta_sync from handle_cast delta_send ~p~n",[erlang:timestamp()]),
+            %lager:error("LASPVIN doing init_delta_sync from handle_cast delta_send ~p~n",[erlang:timestamp()]),
             init_delta_sync(From, ObjectFilterFun);
         false ->
             ok
