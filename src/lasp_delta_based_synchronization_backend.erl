@@ -53,7 +53,9 @@
 extract_log_type_and_payload({delta_send, Node, {Id, Type, _Metadata, Deltas}, Counter}) ->
     [{Id, Deltas}, {Type, Deltas}, {delta_send, Deltas}, {delta_send_protocol, {Id, Node, Counter}}];
 extract_log_type_and_payload({delta_ack, Node, Id, Counter}) ->
-    [{delta_send_protocol, {Id, Node, Counter}}].
+    [{delta_send_protocol, {Id, Node, Counter}}];
+extract_log_type_and_payload({rate_class, Node, Id, Rate}) ->
+    [{delta_send_protocol, {Id, Node, Rate}}].
 
 %%%===================================================================
 %%% API
@@ -182,6 +184,7 @@ handle_cast({delta_send, From, {Id, Type, _Metadata, Deltas}, Counter},
                                                ?CLOCK_INIT(Actor)})
              end),
     lasp_logger:extended("Receiving delta took: ~p microseconds.", [Time]),
+    ?SYNC_BACKEND:send(?MODULE, {rate_class, lasp_support:mynode(), Id, "c1"}, From),
 
     %% Acknowledge message.
     ?SYNC_BACKEND:send(?MODULE, {delta_ack, lasp_support:mynode(), Id, Counter}, From),
@@ -204,6 +207,13 @@ handle_cast({delta_ack, From, Id, Counter}, #state{store=Store}=State) ->
     lasp_marathon_simulations:log_message_queue_size("delta_ack"),
 
     ?CORE:receive_delta(Store, {delta_ack, Id, From, Counter}),
+    {noreply, State};
+
+handle_cast({rate_class, From, Id, Rate}, #state{store=Store}=State) ->
+    lasp_marathon_simulations:log_message_queue_size("rate_class"),
+
+    ?CORE:receive_delta(Store, {rate_class, From, Id, Rate}),
+    lager:error("LASPVIN received rate_class From:~p ID:~p rate:~p Store:~p", [From, Id, Rate, Store]),
     {noreply, State};
 
 %% @private

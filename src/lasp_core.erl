@@ -1005,7 +1005,8 @@ receive_value(Store, {state_send, Origin, {Id, Type, Metadata, Value},
 %%      If the object does not exist, declare it.
 %%
 -spec receive_delta(store(), {delta_send, node(), value(), function(), function()} |
-                             {delta_ack, id(), node(), non_neg_integer()}) ->
+                             {delta_ack, id(), node(), non_neg_integer()} |
+                             {rate_class, id(), node(), string()}) ->
     ok | error.
 receive_delta(Store, {delta_send, Origin, {Id, Type, Metadata, Deltas},
                       MetadataFunBind, MetadataFunDeclare}) ->
@@ -1049,7 +1050,11 @@ receive_delta(Store, {delta_ack, Id, From, Counter}) ->
             ok;
         _ ->
             error
-    end.
+    end;
+
+receive_delta(Store, {rate_class, Id, From, Rate}) ->
+    lager:error("LASPVIN received rate_class with id:~p From:~p Rate:~p for Store:~p", [Id, From, Rate, Store]).
+
 
 %% Internal functions.
 
