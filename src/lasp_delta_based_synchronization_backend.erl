@@ -78,6 +78,8 @@ propagate(ObjectFilterFun) ->
 init([Store, Actor]) ->
     %% Seed the process at initialization.
     ?SYNC_BACKEND:seed(),
+    
+    ets:new(peer_rates, [ordered_set, named_table, public]),
 
     schedule_delta_synchronization(),
     schedule_delta_garbage_collection(),
@@ -214,6 +216,11 @@ handle_cast({rate_class, From, Id, Rate}, #state{store=Store}=State) ->
 
     ?CORE:receive_delta(Store, {rate_class, From, Id, Rate}),
     lager:error("LASPVIN received rate_class From:~p ID:~p rate:~p Store:~p", [From, Id, Rate, Store]),
+    case ets:member(peer_rates, From) of
+       true -> ets:update_element(peer_rates, From, {2, Rate});
+       false -> ets:insert(peer_rates, [{From, Rate}])
+    end,
+    lager:error("LASPVIN peer_rates updated list: ~p ~n",[ets:tab2list(peer_rates)]),
     {noreply, State};
 
 %% @private
