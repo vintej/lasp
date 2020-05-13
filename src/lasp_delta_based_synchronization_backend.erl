@@ -80,6 +80,9 @@ init([Store, Actor]) ->
     ?SYNC_BACKEND:seed(),
     
     ets:new(peer_rates, [ordered_set, named_table, public]),
+    ets:new(c1, [ordered_set, named_table, public]),
+    ets:new(c2, [ordered_set, named_table, public]),
+    ets:new(c3, [ordered_set, named_table, public]),
 
     schedule_delta_synchronization(),
     schedule_delta_garbage_collection(),
@@ -186,7 +189,7 @@ handle_cast({delta_send, From, {Id, Type, _Metadata, Deltas}, Counter},
                                                ?CLOCK_INIT(Actor)})
              end),
     lasp_logger:extended("Receiving delta took: ~p microseconds.", [Time]),
-    ?SYNC_BACKEND:send(?MODULE, {rate_class, lasp_support:mynode(), Id, "c1"}, From),
+    ?SYNC_BACKEND:send(?MODULE, {rate_class, lasp_support:mynode(), Id, os:getenv("RATE_CLASS", "c1")}, From),
 
     %% Acknowledge message.
     ?SYNC_BACKEND:send(?MODULE, {delta_ack, lasp_support:mynode(), Id, Counter}, From),
@@ -218,9 +221,18 @@ handle_cast({rate_class, From, Id, Rate}, #state{store=Store}=State) ->
     lager:error("LASPVIN received rate_class From:~p ID:~p rate:~p Store:~p", [From, Id, Rate, Store]),
     case ets:member(peer_rates, From) of
        true -> ets:update_element(peer_rates, From, {2, Rate});
-       false -> ets:insert(peer_rates, [{From, Rate}])
+       false -> 
+          ets:insert(peer_rates, [{From, Rate}]),
+          case Rate of
+             "c1" -> ets:insert(c1, [{From}]);
+             "c2" -> ets:insert(c2, [{From}]);
+             "c3" -> ets:insert(c3, [{From}])
+          end
     end,
     lager:error("LASPVIN peer_rates updated list: ~p ~n",[ets:tab2list(peer_rates)]),
+    lager:error("LASPVIN c1 list: ~p ~n", [ets:tab2list(c1)]),
+    lager:error("LASPVIN c2 list: ~p ~n", [ets:tab2list(c2)]),
+    lager:error("LASPVIN c3 list: ~p ~n", [ets:tab2list(c3)]),
     {noreply, State};
 
 %% @private
