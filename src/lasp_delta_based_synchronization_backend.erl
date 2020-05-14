@@ -80,9 +80,9 @@ init([Store, Actor]) ->
     ?SYNC_BACKEND:seed(),
     
     ets:new(peer_rates, [ordered_set, named_table, public]),
-    ets:new(c1, [ordered_set, named_table, public]),
-    ets:new(c2, [ordered_set, named_table, public]),
-    ets:new(c3, [ordered_set, named_table, public]),
+    ets:new(c1, [named_table, bag, public]),
+    ets:new(c2, [named_table, bag, public]),
+    ets:new(c3, [named_table, bag, public]),
 
     schedule_delta_synchronization(),
     schedule_delta_garbage_collection(),
@@ -229,9 +229,9 @@ handle_cast({rate_class, From, Rate}, #state{store=Store}=State) ->
        false -> 
           ets:insert(peer_rates, [{From, Rate}]),
           case Rate of
-             "c1" -> ets:insert(c1, [{From}]);
-             "c2" -> ets:insert(c2, [{From}]);
-             "c3" -> ets:insert(c3, [{From}])
+             "c1" -> ets:insert(c1, [{"peer", From}]);
+             "c2" -> ets:insert(c2, [{"peer", From}]);
+             "c3" -> ets:insert(c3, [{"peer", From}])
           end
     end,
     lager:error("LASPVIN peer_rates updated list: ~p ~n",[ets:tab2list(peer_rates)]),
