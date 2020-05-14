@@ -54,8 +54,8 @@ extract_log_type_and_payload({delta_send, Node, {Id, Type, _Metadata, Deltas}, C
     [{Id, Deltas}, {Type, Deltas}, {delta_send, Deltas}, {delta_send_protocol, {Id, Node, Counter}}];
 extract_log_type_and_payload({delta_ack, Node, Id, Counter}) ->
     [{delta_send_protocol, {Id, Node, Counter}}];
-extract_log_type_and_payload({rate_class, Node, Id, Rate}) ->
-    [{delta_send_protocol, {Id, Node, Rate}}].
+extract_log_type_and_payload({rate_class, Node, Rate}) ->
+    [{delta_send_protocol, {Node, Rate}}].
 
 %%%===================================================================
 %%% API
@@ -86,6 +86,7 @@ init([Store, Actor]) ->
 
     schedule_delta_synchronization(),
     schedule_delta_garbage_collection(),
+    schedule_rate_class_info_propagation(),
 
     {ok, #state{actor=Actor, gossip_peers=[], store=Store}}.
 
@@ -189,7 +190,7 @@ handle_cast({delta_send, From, {Id, Type, _Metadata, Deltas}, Counter},
                                                ?CLOCK_INIT(Actor)})
              end),
     lasp_logger:extended("Receiving delta took: ~p microseconds.", [Time]),
-    ?SYNC_BACKEND:send(?MODULE, {rate_class, lasp_support:mynode(), Id, os:getenv("RATE_CLASS", "c1")}, From),
+    %?SYNC_BACKEND:send(?MODULE, {rate_class, lasp_support:mynode(), os:getenv("RATE_CLASS", "c1")}, From),
 
     %% Acknowledge message.
     ?SYNC_BACKEND:send(?MODULE, {delta_ack, lasp_support:mynode(), Id, Counter}, From),
@@ -214,13 +215,17 @@ handle_cast({delta_ack, From, Id, Counter}, #state{store=Store}=State) ->
     ?CORE:receive_delta(Store, {delta_ack, Id, From, Counter}),
     {noreply, State};
 
-handle_cast({rate_class, From, Id, Rate}, #state{store=Store}=State) ->
+handle_cast({rate_class, From, Rate}, #state{store=Store}=State) ->
     lasp_marathon_simulations:log_message_queue_size("rate_class"),
 
-    ?CORE:receive_delta(Store, {rate_class, From, Id, Rate}),
-    lager:error("LASPVIN received rate_class From:~p ID:~p rate:~p Store:~p", [From, Id, Rate, Store]),
+    ?CORE:receive_delta(Store, {rate_class, From, Rate}),
+    lager:error("LASPVIN received rate_class From:~p rate:~p Store:~p", [From, Rate, Store]),
     case ets:member(peer_rates, From) of
-       true -> ets:update_element(peer_rates, From, {2, Rate});
+       true -> 
+          case ets:lookup_element(peer_rates, From, 2) == Rate of
+             true -> ok;
+             false -> ets:update_element(peer_rates, From, {2, Rate})
+          end;
        false -> 
           ets:insert(peer_rates, [{From, Rate}]),
           case Rate of
@@ -315,6 +320,22 @@ handle_info(delta_gc, #state{store=Store}=State) ->
 
     {noreply, State};
 
+handle_info(rate_info, #state{store=Store}=State) ->
+    lager:error("LASPVIN coming to rate_info ~p ~n",[Store]),
+
+    %% Get the active set from the membership protocol.
+    {ok, Members} = ?SYNC_BACKEND:membership(),
+
+    %% Remove ourself and compute exchange peers.
+    Peers = ?SYNC_BACKEND:compute_exchange(?SYNC_BACKEND:without_me(Members)),
+
+    %% Transmit updates.
+    lists:foreach(fun(Peer) ->
+                          ?SYNC_BACKEND:send(?MODULE, {rate_class, lasp_support:mynode(), os:getenv("RATE_CLASS", "c1")}, Peer) end,
+                  Peers),
+    schedule_rate_class_info_propagation(),
+    {noreply, State};
+
 handle_info(_Msg, State) ->
     {noreply, State}.
 
@@ -381,6 +402,10 @@ schedule_delta_synchronization() ->
 %% @private
 schedule_delta_garbage_collection() ->
     timer:send_after(?DELTA_GC_INTERVAL, delta_gc).
+
+%% @private
+schedule_rate_class_info_propagation() ->
+    timer:send_after(10000, rate_info).
 
 %% @private
 init_delta_sync(Peer, ObjectFilterFun) ->
