@@ -82,6 +82,7 @@ init([Store, Actor]) ->
     ?SYNC_BACKEND:seed(),
     
     ets:new(peer_rates, [ordered_set, named_table, public]),
+    ets:insert(peer_rates, [{"self_rate", os:getenv("RATE_CLASS", "c1")}]),
     ets:new(c1, [named_table, bag, public]),
     ets:new(c2, [named_table, bag, public]),
     ets:new(c3, [named_table, bag, public]),
@@ -239,10 +240,34 @@ handle_cast({rate_class, From, Rate}, #state{store=Store}=State) ->
     lager:error("LASPVIN c1 list: ~p ~n", [ets:tab2list(c1)]),
     lager:error("LASPVIN c2 list: ~p ~n", [ets:tab2list(c2)]),
     lager:error("LASPVIN c3 list: ~p ~n", [ets:tab2list(c3)]),
+    case ets:lookup_element(peer_rates, "self_rate", 2) > "c1" of
+       true ->
+          case ets:lookup_element(peer_rates, "self_rate", 2) < "c3" of
+             true ->
+                case ets:lookup_element(c1, "peer", 2) /= [] of
+                   true -> ?SYNC_BACKEND:send(?MODULE, {rate_subscribe, lasp_support:mynode(), ets:lookup_element(peer_rates, "self_rate", 2)}, lists:nth(1, ets:lookup_element(c1, "peer", 2)));
+                   false -> io:fwrite("LASPVIN no peer to subscribe")
+                end;
+             false ->
+                case ets:lookup_element(c2, "peer", 2) /= [] of
+                   true ->  ?SYNC_BACKEND:send(?MODULE, {rate_subscribe, lasp_support:mynode(), ets:lookup_element(peer_rates, "self_rate", 2)}, lists:nth(1, ets:lookup_element(c2, "peer", 2)));
+                   false ->
+                      case ets:lookup_element(c1, "peer", 2) /= [] of
+                         true -> ?SYNC_BACKEND:send(?MODULE, {rate_subscribe, lasp_support:mynode(), ets:lookup_element(peer_rates, "self_rate", 2)}, lists:nth(1, ets:lookup_element(c1, "peer", 2)));
+                         false -> io:fwrite("LASPVIN no peer to subscribe")
+                      end
+                end
+          end;
+       false ->
+          case ets:lookup_element(c1, "peer", 2) /= [] of
+             true -> ?SYNC_BACKEND:send(?MODULE, {rate_subscribe, lasp_support:mynode(), ets:lookup_element(peer_rates, "self_rate", 2)}, lists:nth(1, ets:lookup_element(c1, "peer", 2)));
+             false -> io:fwrite("LASPVIN no c1 peer to subscribe")
+          end
+    end,
     {noreply, State};
 
 handle_cast({rate_subscribe, From, Rate}, #state{store=Store}=State) ->
-    lasp_marathon_simulations:log_message_queue_size("rate_class"),
+    lasp_marathon_simulations:log_message_queue_size("rate_subscribe"),
 
     ?CORE:receive_delta(Store, {rate_class, From, Rate}),
     lager:error("LASPVIN received rate_subscribe From:~p rate:~p Store:~p", [From, Rate, Store]),
@@ -354,10 +379,11 @@ handle_info(rate_info, #state{store=Store}=State) ->
 
     %% Remove ourself and compute exchange peers.
     Peers = ?SYNC_BACKEND:compute_exchange(?SYNC_BACKEND:without_me(Members)),
-
+    
+    io:fwrite("LASPVIN sending self_rate: ~p ~n", [ets:lookup_element(peer_rates, "self_rate", 2)]),
     %% Transmit updates.
     lists:foreach(fun(Peer) ->
-                          ?SYNC_BACKEND:send(?MODULE, {rate_class, lasp_support:mynode(), os:getenv("RATE_CLASS", "c1")}, Peer) end,
+                          ?SYNC_BACKEND:send(?MODULE, {rate_class, lasp_support:mynode(), ets:lookup_element(peer_rates, "self_rate", 2)}, Peer) end,
                   Peers),
     schedule_rate_class_info_propagation(),
     {noreply, State};
