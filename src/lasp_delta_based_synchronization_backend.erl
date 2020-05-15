@@ -244,24 +244,24 @@ handle_cast({rate_class, From, Rate}, #state{store=Store}=State) ->
        true ->
           case ets:lookup_element(peer_rates, "self_rate", 2) < "c3" of
              true ->
-                case ets:lookup_element(c1, "peer", 2) /= [] of
+                case ets:member(c1, "peer") of
                    true -> ?SYNC_BACKEND:send(?MODULE, {rate_subscribe, lasp_support:mynode(), ets:lookup_element(peer_rates, "self_rate", 2)}, lists:nth(1, ets:lookup_element(c1, "peer", 2)));
-                   false -> io:fwrite("LASPVIN no peer to subscribe")
+                   false -> io:fwrite("LASPVIN no peer to subscribe Case 1 ~n ")
                 end;
              false ->
-                case ets:lookup_element(c2, "peer", 2) /= [] of
+                case ets:member(c2, "peer") of
                    true ->  ?SYNC_BACKEND:send(?MODULE, {rate_subscribe, lasp_support:mynode(), ets:lookup_element(peer_rates, "self_rate", 2)}, lists:nth(1, ets:lookup_element(c2, "peer", 2)));
                    false ->
-                      case ets:lookup_element(c1, "peer", 2) /= [] of
+                      case ets:member(c1, "peer") of
                          true -> ?SYNC_BACKEND:send(?MODULE, {rate_subscribe, lasp_support:mynode(), ets:lookup_element(peer_rates, "self_rate", 2)}, lists:nth(1, ets:lookup_element(c1, "peer", 2)));
-                         false -> io:fwrite("LASPVIN no peer to subscribe")
+                         false -> io:fwrite("LASPVIN no peer to subscribe case 2 ~n")
                       end
                 end
           end;
        false ->
-          case ets:lookup_element(c1, "peer", 2) /= [] of
+          case ets:member(c1, "peer") of
              true -> ?SYNC_BACKEND:send(?MODULE, {rate_subscribe, lasp_support:mynode(), ets:lookup_element(peer_rates, "self_rate", 2)}, lists:nth(1, ets:lookup_element(c1, "peer", 2)));
-             false -> io:fwrite("LASPVIN no c1 peer to subscribe")
+             false -> io:fwrite("LASPVIN no c1 peer to subscribe case c1 ~n")
           end
     end,
     {noreply, State};
