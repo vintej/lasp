@@ -231,9 +231,21 @@ handle_cast({rate_class, From, Rate}, #state{store=Store}=State) ->
        false -> 
           ets:insert(peer_rates, [{From, Rate}]),
           case Rate of
-             "c1" -> ets:insert(c1, [{"peer", From}]);
-             "c2" -> ets:insert(c2, [{"peer", From}]);
-             "c3" -> ets:insert(c3, [{"peer", From}])
+             "c1" ->
+                 case check_member_list(c1, From, "peer") of
+                    true -> ok;
+                    false -> ets:insert(c1, [{"peer", From}])
+                 end;
+             "c2" ->
+                 case check_member_list(c2, From, "peer") of
+                    true -> ok;
+                    false -> ets:insert(c2, [{"peer", From}])
+                 end;
+             "c3" ->
+                 case check_member_list(c3, From, "peer") of
+                    true -> ok;
+                    false -> ets:insert(c3, [{"peer", From}])
+                 end
           end
     end,
     lager:error("LASPVIN peer_rates updated list: ~p ~n",[ets:tab2list(peer_rates)]),
@@ -271,19 +283,22 @@ handle_cast({rate_subscribe, From, Rate}, #state{store=Store}=State) ->
 
     ?CORE:receive_delta(Store, {rate_class, From, Rate}),
     lager:error("LASPVIN received rate_subscribe From:~p rate:~p Store:~p", [From, Rate, Store]),
-    case ets:member(peer_rates, From) of
-       true ->
-          case ets:lookup_element(peer_rates, From, 2) == Rate of
-             true -> ok;
-             false -> ets:update_element(peer_rates, From, {2, Rate})
-          end;
-       false ->
-          ets:insert(peer_rates, [{From, Rate}]),
-          case Rate of
-             "c1" -> ets:insert(c1, [{"subscriber", From}]);
-             "c2" -> ets:insert(c2, [{"subscriber", From}]);
-             "c3" -> ets:insert(c3, [{"subscriber", From}])
-          end
+    case Rate of
+             "c1" -> 
+                 case check_member_list(c1, From, "subscriber") of
+                    true -> ok;
+                    false -> ets:insert(c1, [{"subscriber", From}])
+                 end;
+             "c2" -> 
+                 case check_member_list(c2, From, "subscriber") of
+                    true -> ok;
+                    false -> ets:insert(c2, [{"subscriber", From}])
+                 end;
+             "c3" ->
+                 case check_member_list(c3, From, "subscriber") of
+                    true -> ok;
+                    false -> ets:insert(c3, [{"subscriber", From}])
+                 end
     end,
     lager:error("LASPVIN peer_rates updated list: ~p ~n",[ets:tab2list(peer_rates)]),
     lager:error("LASPVIN c1 list: ~p ~n", [ets:tab2list(c1)]),
@@ -462,6 +477,13 @@ schedule_rate_class_info_propagation() ->
 %% @private
 init_delta_sync(Peer, ObjectFilterFun) ->
     gen_server:cast(?MODULE, {delta_exchange, Peer, ObjectFilterFun}).
+
+%% @private
+check_member_list(RateList, Member, Role) ->
+     case ets:member(RateList, Role) of
+        true -> lists:member(Member, ets:lookup_element(RateList, Role, 2));
+        false -> ets:member(RateList, Role)
+     end.
 
 %% @private
 lists_min([]) -> 0;
