@@ -33,6 +33,7 @@
          handle_cast/2,
          handle_info/2,
          terminate/2,
+         get_members/1, 
          code_change/3]).
 
 -export([propagate/1]).
@@ -227,7 +228,6 @@ handle_cast({rate_ack, From, Rate}, #state{store=Store}=State) ->
        true -> ets:insert(rate_ack, [{From}]);
        false -> ok
     end,
-    lager:error("LASPVIN updated rate_ack: ~p ~n", [ets:tab2list(rate_ack)]),
     {noreply, State};
 
 handle_cast({rate_class, From, Rate}, #state{store=Store}=State) ->
@@ -290,7 +290,6 @@ handle_cast({rate_subscribe, From, Rate}, #state{store=Store}=State) ->
                     false -> ets:insert(c3, [{"subscriber", From}])
                  end
     end,
-    lager:error("LASPVIN peer_rates updated list: ~p ~n",[ets:tab2list(peer_rates)]),
     lager:error("LASPVIN c1 list: ~p ~n", [ets:tab2list(c1)]),
     lager:error("LASPVIN c2 list: ~p ~n", [ets:tab2list(c2)]),
     lager:error("LASPVIN c3 list: ~p ~n", [ets:tab2list(c3)]),
@@ -377,15 +376,13 @@ handle_info(delta_gc, #state{store=Store}=State) ->
     {noreply, State};
 
 handle_info(rate_info, #state{store=Store}=State) ->
-    lager:error("LASPVIN coming to rate_info ~p ~n",[Store]),
 
     %% Get the active set from the membership protocol.
     {ok, Members} = ?SYNC_BACKEND:membership(),
 
     %% Remove ourself and compute exchange peers.
     Peers = ?SYNC_BACKEND:compute_exchange(?SYNC_BACKEND:without_me(Members)),
-    
-    io:fwrite("LASPVIN sending self_rate: ~p ~n", [ets:lookup_element(peer_rates, "self_rate", 2)]),
+    lager:info("Store rate_info ~p ~n", [Store]), 
     %% Transmit updates.
     lists:foreach(fun(Peer) ->
                         case ets:member(rate_ack, Peer) of
@@ -394,7 +391,6 @@ handle_info(rate_info, #state{store=Store}=State) ->
                         end
                   end, 
                   Peers),
-    lager:error("LASPVIN checking_subscription now()~n"),
     check_subscription(),
     schedule_rate_class_info_propagation(),
     {noreply, State};
@@ -462,6 +458,9 @@ schedule_delta_synchronization() ->
             ok
     end.
 
+get_members(ListToGet) ->
+    ets:tab2list(ListToGet).
+
 %% @private
 schedule_delta_garbage_collection() ->
     timer:send_after(?DELTA_GC_INTERVAL, delta_gc).
@@ -484,7 +483,6 @@ check_member_list(RateList, Member, Role) ->
 
 %% @private
 check_subscription() ->
-    lager:error("LASPVIN came in check_subscription ~n"),
     case ets:member(peer_rates, "subscription") of
        true -> lager:error("LASPVIN subscription done already ~n"),ok;
        false ->
