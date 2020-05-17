@@ -56,6 +56,8 @@ extract_log_type_and_payload({delta_ack, Node, Id, Counter}) ->
     [{delta_send_protocol, {Id, Node, Counter}}];
 extract_log_type_and_payload({rate_class, Node, Rate}) ->
     [{delta_send_protocol, {Node, Rate}}];
+extract_log_type_and_payload({rate_ack, Node, Rate}) ->
+    [{delta_send_protocol, {Node, Rate}}];
 extract_log_type_and_payload({rate_subscribe, Node, Rate}) ->
     [{delta_send_protocol, {Node, Rate}}].
 
@@ -83,6 +85,7 @@ init([Store, Actor]) ->
     
     ets:new(peer_rates, [ordered_set, named_table, public]),
     ets:insert(peer_rates, [{"self_rate", os:getenv("RATE_CLASS", "c1")}]),
+    ets:new(rate_ack, [ordered_set, named_table, public]),
     ets:new(c1, [named_table, bag, public]),
     ets:new(c2, [named_table, bag, public]),
     ets:new(c3, [named_table, bag, public]),
@@ -217,6 +220,15 @@ handle_cast({delta_ack, From, Id, Counter}, #state{store=Store}=State) ->
     ?CORE:receive_delta(Store, {delta_ack, Id, From, Counter}),
     {noreply, State};
 
+handle_cast({rate_ack, From, Rate}, #state{store=Store}=State) ->
+    lasp_marathon_simulations:log_message_queue_size("rate_ack ~p ~n", [Store]),
+    lager:error("LASPVIN received ack from ~p ~n", [From]),
+    case Rate ==  ets:lookup_element(peer_rates, "self_rate", 2) of
+       true -> ets:insert(peer_rates, [{From}]);
+       false -> ok
+    end,
+    {noreply, State};
+
 handle_cast({rate_class, From, Rate}, #state{store=Store}=State) ->
     lasp_marathon_simulations:log_message_queue_size("rate_class"),
 
@@ -252,6 +264,7 @@ handle_cast({rate_class, From, Rate}, #state{store=Store}=State) ->
     lager:error("LASPVIN c1 list: ~p ~n", [ets:tab2list(c1)]),
     lager:error("LASPVIN c2 list: ~p ~n", [ets:tab2list(c2)]),
     lager:error("LASPVIN c3 list: ~p ~n", [ets:tab2list(c3)]),
+    ?SYNC_BACKEND:send(?MODULE, {rate_ack, lasp_support:mynode(), Rate}, From),
     {noreply, State};
 
 handle_cast({rate_subscribe, From, Rate}, #state{store=Store}=State) ->
@@ -374,7 +387,11 @@ handle_info(rate_info, #state{store=Store}=State) ->
     io:fwrite("LASPVIN sending self_rate: ~p ~n", [ets:lookup_element(peer_rates, "self_rate", 2)]),
     %% Transmit updates.
     lists:foreach(fun(Peer) ->
-                          ?SYNC_BACKEND:send(?MODULE, {rate_class, lasp_support:mynode(), ets:lookup_element(peer_rates, "self_rate", 2)}, Peer) end,
+                        case ets:member(rate_ack, Peer) of
+                           true -> ok;
+                           false -> ?SYNC_BACKEND:send(?MODULE, {rate_class, lasp_support:mynode(), ets:lookup_element(peer_rates, "self_rate", 2)}, Peer)
+                        end
+                  end, 
                   Peers),
     lager:error("LASPVIN checking_subscription now()~n"),
     check_subscription(),
