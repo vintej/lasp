@@ -221,12 +221,13 @@ handle_cast({delta_ack, From, Id, Counter}, #state{store=Store}=State) ->
     {noreply, State};
 
 handle_cast({rate_ack, From, Rate}, #state{store=Store}=State) ->
-    lasp_marathon_simulations:log_message_queue_size("rate_ack ~p ~n", [Store]),
-    lager:error("LASPVIN received ack from ~p ~n", [From]),
+    lasp_marathon_simulations:log_message_queue_size("rate_ack"),
+    lager:error("LASPVIN received ack from ~p Store ~p ~n", [From, Store]),
     case Rate ==  ets:lookup_element(peer_rates, "self_rate", 2) of
-       true -> ets:insert(peer_rates, [{From}]);
+       true -> ets:insert(rate_ack, [{From}]);
        false -> ok
     end,
+    lager:error("LASPVIN updated rate_ack: ~p ~n", [ets:tab2list(rate_ack)]),
     {noreply, State};
 
 handle_cast({rate_class, From, Rate}, #state{store=Store}=State) ->
