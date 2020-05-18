@@ -90,7 +90,7 @@ init([Store, Actor]) ->
     ets:new(c1, [named_table, bag, public]),
     ets:new(c2, [named_table, bag, public]),
     ets:new(c3, [named_table, bag, public]),
-
+    lager:debug("LASPVIN test"),
     schedule_delta_synchronization(),
     schedule_delta_garbage_collection(),
     schedule_rate_class_info_propagation(),
@@ -223,7 +223,7 @@ handle_cast({delta_ack, From, Id, Counter}, #state{store=Store}=State) ->
 
 handle_cast({rate_ack, From, Rate}, #state{store=Store}=State) ->
     lasp_marathon_simulations:log_message_queue_size("rate_ack"),
-    lager:error("LASPVIN received ack from ~p Store ~p ~n", [From, Store]),
+    lager:debug("LASPVIN received ack from ~p Store ~p ~n", [From, Store]),
     case Rate ==  ets:lookup_element(peer_rates, "self_rate", 2) of
        true -> ets:insert(rate_ack, [{From}]);
        false -> ok
@@ -234,7 +234,7 @@ handle_cast({rate_class, From, Rate}, #state{store=Store}=State) ->
     lasp_marathon_simulations:log_message_queue_size("rate_class"),
 
     ?CORE:receive_delta(Store, {rate_class, From, Rate}),
-    lager:error("LASPVIN received rate_class From:~p rate:~p Store:~p", [From, Rate, Store]),
+    lager:debug("LASPVIN received rate_class From:~p rate:~p Store:~p", [From, Rate, Store]),
     case ets:member(peer_rates, From) of
        true -> 
           case ets:lookup_element(peer_rates, From, 2) == Rate of
@@ -261,10 +261,10 @@ handle_cast({rate_class, From, Rate}, #state{store=Store}=State) ->
                  end
           end
     end,
-    lager:error("LASPVIN peer_rates updated list: ~p ~n",[ets:tab2list(peer_rates)]),
-    lager:error("LASPVIN c1 list: ~p ~n", [ets:tab2list(c1)]),
-    lager:error("LASPVIN c2 list: ~p ~n", [ets:tab2list(c2)]),
-    lager:error("LASPVIN c3 list: ~p ~n", [ets:tab2list(c3)]),
+    lager:debug("LASPVIN peer_rates updated list: ~p ~n",[ets:tab2list(peer_rates)]),
+    lager:debug("LASPVIN c1 list: ~p ~n", [ets:tab2list(c1)]),
+    lager:debug("LASPVIN c2 list: ~p ~n", [ets:tab2list(c2)]),
+    lager:debug("LASPVIN c3 list: ~p ~n", [ets:tab2list(c3)]),
     ?SYNC_BACKEND:send(?MODULE, {rate_ack, lasp_support:mynode(), Rate}, From),
     {noreply, State};
 
@@ -272,7 +272,7 @@ handle_cast({rate_subscribe, From, Rate}, #state{store=Store}=State) ->
     lasp_marathon_simulations:log_message_queue_size("rate_subscribe"),
 
     ?CORE:receive_delta(Store, {rate_class, From, Rate}),
-    lager:error("LASPVIN received rate_subscribe From:~p rate:~p Store:~p", [From, Rate, Store]),
+    lager:debug("LASPVIN received rate_subscribe From:~p rate:~p Store:~p", [From, Rate, Store]),
     case Rate of
              "c1" -> 
                  case check_member_list(c1, From, "subscriber") of
@@ -290,9 +290,9 @@ handle_cast({rate_subscribe, From, Rate}, #state{store=Store}=State) ->
                     false -> ets:insert(c3, [{"subscriber", From}])
                  end
     end,
-    lager:error("LASPVIN c1 list: ~p ~n", [ets:tab2list(c1)]),
-    lager:error("LASPVIN c2 list: ~p ~n", [ets:tab2list(c2)]),
-    lager:error("LASPVIN c3 list: ~p ~n", [ets:tab2list(c3)]),
+    lager:debug("LASPVIN c1 list: ~p ~n", [ets:tab2list(c1)]),
+    lager:debug("LASPVIN c2 list: ~p ~n", [ets:tab2list(c2)]),
+    lager:debug("LASPVIN c3 list: ~p ~n", [ets:tab2list(c3)]),
     {noreply, State};
 
 %% @private
@@ -382,7 +382,7 @@ handle_info(rate_info, #state{store=Store}=State) ->
 
     %% Remove ourself and compute exchange peers.
     Peers = ?SYNC_BACKEND:compute_exchange(?SYNC_BACKEND:without_me(Members)),
-    lager:info("Store rate_info ~p ~n", [Store]), 
+    lager:debug("LASPVIN Store rate_info ~p ~n", [Store]), 
     %% Transmit updates.
     lists:foreach(fun(Peer) ->
                         case ets:member(rate_ack, Peer) of
@@ -467,6 +467,7 @@ schedule_delta_garbage_collection() ->
 
 %% @private
 schedule_rate_class_info_propagation() ->
+    lager:debug("LASPVIN test"),
     timer:send_after(10000, rate_info).
 
 
@@ -484,7 +485,7 @@ check_member_list(RateList, Member, Role) ->
 %% @private
 check_subscription() ->
     case ets:member(peer_rates, "subscription") of
-       true -> lager:error("LASPVIN subscription done already ~n"),ok;
+       true -> lager:debug("LASPVIN subscription done already ~n"),ok;
        false ->
           case ets:lookup_element(peer_rates, "self_rate", 2) > "c1" of
              true ->
