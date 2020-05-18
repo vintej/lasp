@@ -60,7 +60,9 @@ extract_log_type_and_payload({rate_class, Node, Rate}) ->
 extract_log_type_and_payload({rate_ack, Node, Rate}) ->
     [{delta_send_protocol, {Node, Rate}}];
 extract_log_type_and_payload({rate_subscribe, Node, Rate}) ->
-    [{delta_send_protocol, {Node, Rate}}].
+    [{delta_send_protocol, {Node, Rate}}];
+extract_log_type_and_payload({find_sub, Node, Rate, Id}) ->
+    [{delta_send_protocol, {Node, Rate, Id}}].
 
 %%%===================================================================
 %%% API
@@ -90,6 +92,7 @@ init([Store, Actor]) ->
     ets:new(c1, [named_table, bag, public]),
     ets:new(c2, [named_table, bag, public]),
     ets:new(c3, [named_table, bag, public]),
+    ets:new(find_sub, [named_table, bag, public]),
     lager:debug("LASPVIN test"),
     schedule_delta_synchronization(),
     schedule_delta_garbage_collection(),
@@ -219,6 +222,36 @@ handle_cast({delta_ack, From, Id, Counter}, #state{store=Store}=State) ->
     lasp_marathon_simulations:log_message_queue_size("delta_ack"),
 
     ?CORE:receive_delta(Store, {delta_ack, Id, From, Counter}),
+    {noreply, State};
+
+handle_cast({find_sub, From, ReqRate, Id}, #state{store=Store}=State) ->
+    lasp_marathon_simulations:log_message_queue_size("find_sub"),
+    lager:debug("LASPVIN store:~p ~n", [Store]),
+    case ets:member(find_sub, ReqRate) of
+       true ->
+          case lists:member(Id, ets:lookup_element(find_sub, ReqRate, 2)) of
+             true -> lager:error("LASPVIN Find_sub request id exists");
+             false -> ets:insert(find_sub, [{ReqRate, Id, From}])
+          end;
+       false ->
+          ets:insert(find_sub, {ReqRate, Id, From}),
+          case ReqRate of
+             "c1" ->
+                case ets:member(c1, "peer") of
+                   true ->
+                      lager:error("LASPVIN I found the peer ~n");
+                   false -> lager:error("LASPVIN send to peers"), ok
+                end;
+             "c2" ->
+                case ets:member(c2, "peer") of
+                   true ->
+                      lager:error("LASPVIN I found the peer ~n");
+                   false -> 
+                      case ets:member(c1, "peer") of
+                         true -> lager:error("LASPVIN found the peer");
+                         false -> "LASPVIN send to peers", ok
+                   end
+                end
     {noreply, State};
 
 handle_cast({rate_ack, From, Rate}, #state{store=Store}=State) ->
@@ -483,6 +516,12 @@ check_member_list(RateList, Member, Role) ->
      end.
 
 %% @private
+get_peers() ->
+    {ok, Members} = ?SYNC_BACKEND:membership(),
+    %% Remove ourself and compute exchange peers.
+    ?SYNC_BACKEND:compute_exchange(?SYNC_BACKEND:without_me(Members)).
+
+%% @private
 check_subscription() ->
     case ets:member(peer_rates, "subscription") of
        true -> lager:debug("LASPVIN subscription done already ~n"),ok;
@@ -493,7 +532,8 @@ check_subscription() ->
                    true ->
                       case ets:member(c1, "peer") of
                          true -> ets:insert(peer_rates, [{"subscription", lists:nth(1, ets:lookup_element(c1, "peer", 2))}]), ?SYNC_BACKEND:send(?MODULE, {rate_subscribe, lasp_support:mynode(), ets:lookup_element(peer_rates, "self_rate", 2)}, lists:nth(1, ets:lookup_element(c1, "peer", 2)));
-                         false -> io:fwrite("LASPVIN no peer to subscribe Case 1 ~n ")
+                         false -> 
+                            io:fwrite("LASPVIN no peer to subscribe Case 1 ~n ")
                       end;
                    false ->
                       case ets:member(c2, "peer") of
@@ -508,7 +548,16 @@ check_subscription() ->
              false ->
                 case ets:member(c1, "peer") of
                    true -> ets:insert(peer_rates, [{"subscription", lists:nth(1, ets:lookup_element(c1, "peer", 2))}]), ?SYNC_BACKEND:send(?MODULE, {rate_subscribe, lasp_support:mynode(), ets:lookup_element(peer_rates, "self_rate", 2)}, lists:nth(1, ets:lookup_element(c1, "peer", 2)));
-                   false -> io:fwrite("LASPVIN no c1 peer to subscribe case c1 ~n")
+                   false -> 
+                      io:fwrite("LASPVIN no c1 peer to subscribe forwarding to peers ~n"),
+                      ets:insert(find_sub, [{"c1", lasp_support:mynode()++"c1", lasp_support:mynode()}]),
+                      lists:foreach(fun(Peer) ->
+                         case lists:member(Peer, ets:lookup_element(find_sub, "c1", 3)) of
+                            true -> ok;
+                            false -> ?SYNC_BACKEND:send(?MODULE, {find_sub, lasp_support:mynode(), "c1", lasp_support:mynode()++"c1"}, From)
+                         end
+                      end,
+                      get_peers()), 
                 end
           end
     end.
