@@ -320,8 +320,10 @@ handle_cast({rate_class, From, Rate}, #state{store=Store}=State) ->
        _Else ->
           %Send Find_sub req
           lists:foreach(fun(ReqRate) ->
-                          ?SYNC_BACKEND:send(?MODULE, {find_sub, lasp_support:mynode(), lists:nth(1,ReqRate), lists:nth(1,ets:lookup_element(find_sub, lists:nth(1,ReqRate), 2))}, From),
-                          lager:error("LASPVIN sent find_sub req ~n")
+                          case From == lists:nth(1,ets:lookup_element(find_sub, lists:nth(1,ReqRate), 3)) of
+                             true -> ok;
+                             false ->lager:error("LASPVIN sent find_sub req ~n"), ?SYNC_BACKEND:send(?MODULE, {find_sub, lasp_support:mynode(), lists:nth(1,ReqRate), lists:nth(1,ets:lookup_element(find_sub, lists:nth(1,ReqRate), 2))}, From)
+                          end
                         end,
                   lists:usort(ets:match(find_sub, {'$1', '_', '_'})))
     end,
