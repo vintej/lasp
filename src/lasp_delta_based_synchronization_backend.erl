@@ -232,7 +232,10 @@ handle_cast({find_sub, From, ReqRate, Id}, #state{store=Store}=State) ->
        true ->
           case lists:member(Id, ets:lookup_element(find_sub, ReqRate, 2)) of
              true -> lager:error("LASPVIN Find_sub request id exists");
-             false -> ets:insert(find_sub, [{ReqRate, Id, From}])
+             false -> 
+                lager:error("LASPVIN Matching find_sub rates found~n"),
+                lager:error("LASPVIN find_sub:insert ReqRate:~p Id:~p From:~p ~n", [ReqRate, Id, From]),
+                ets:insert(find_sub, [{ReqRate, Id, From}])
           end;
        false ->
           ets:insert(find_sub, {ReqRate, Id, From}),
