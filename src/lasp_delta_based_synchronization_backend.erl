@@ -550,19 +550,27 @@ check_subscription() ->
              false ->
                 case ets:member(c1, "peer") of
                    true -> ets:insert(peer_rates, [{"subscription", lists:nth(1, ets:lookup_element(c1, "peer", 2))}]), ?SYNC_BACKEND:send(?MODULE, {rate_subscribe, lasp_support:mynode(), ets:lookup_element(peer_rates, "self_rate", 2)}, lists:nth(1, ets:lookup_element(c1, "peer", 2)));
-                   false -> 
-                      io:fwrite("LASPVIN no c1 peer to subscribe forwarding to peers ~n"),
-                      ets:insert(find_sub, [{"c1", lasp_support:mynode()++"c1", lasp_support:mynode()}]),
-                      lists:foreach(fun(Peer) ->
-                         case lists:member(Peer, ets:lookup_element(find_sub, "c1", 3)) of
-                            true -> ok;
-                            false -> ?SYNC_BACKEND:send(?MODULE, {find_sub, lasp_support:mynode(), "c1", lasp_support:mynode()++"c1"}, Peer)
-                         end
-                      end,
-                      get_peers()) 
+                   false ->
+                      case ets:member(find_sub, ets:lookup_element(peer_rates, "self_rate", 2)) of
+                         true -> lager:error("Find_sub_req exists for the class");
+                         false -> find_sub_req()
+                      end
                 end
           end
     end.
+
+%%private
+find_sub_req() ->
+   lager:error("LASPVIN no c1 peer to subscribe forwarding to peers ~n"),
+   ets:insert(find_sub, [{"c1", erlang:atom_to_list(lasp_support:mynode())++"c1", lasp_support:mynode()}]),
+   lists:foreach(fun(Peer) ->
+      case lists:member(Peer, ets:lookup_element(find_sub, "c1", 3)) of
+         true -> ok;
+         false -> 
+            ?SYNC_BACKEND:send(?MODULE, {find_sub, lasp_support:mynode(),"c1", (erlang:atom_to_list(lasp_support:mynode())++"c1")}, Peer)
+      end
+   end,
+   get_peers()).
 
 %% @private
 lists_min([]) -> 0;
