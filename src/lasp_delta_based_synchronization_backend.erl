@@ -301,6 +301,16 @@ handle_cast({rate_class, From, Rate}, #state{store=Store}=State) ->
     lager:debug("LASPVIN c2 list: ~p ~n", [ets:tab2list(c2)]),
     lager:debug("LASPVIN c3 list: ~p ~n", [ets:tab2list(c3)]),
     ?SYNC_BACKEND:send(?MODULE, {rate_ack, lasp_support:mynode(), Rate}, From),
+    case ets:first(find_sub) of
+       '$end_of_table' -> ok;
+       _Else ->
+          %Send Find_sub req
+          lists:foreach(fun(ReqRate) ->
+                          ?SYNC_BACKEND:send(?MODULE, {find_sub, lasp_support:mynode(), lists:nth(1,ReqRate), lists:nth(1,ets:lookup_element(find_sub, lists:nth(1,ReqRate), 2))}, From),
+                          lager:error("LASPVIN sent find_sub req ~n")
+                        end,
+                  lists:usort(ets:match(find_sub, {'$1', '_', '_'})))
+    end,
     {noreply, State};
 
 handle_cast({rate_subscribe, From, Rate}, #state{store=Store}=State) ->
