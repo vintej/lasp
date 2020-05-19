@@ -239,13 +239,27 @@ handle_cast({find_sub, From, ReqRate, Id}, #state{store=Store}=State) ->
              "c1" ->
                 case ets:member(c1, "peer") of
                    true ->
-                      lager:error("LASPVIN I found the peer ~n");
+                      case lists:member(From, ets:lookup_element(c1, "peer", 2)) of
+                         true -> 
+                            case length(ets:lookup_element(c1, "peer", 2)) > 1 of
+                               true -> lager:error("LASPVIN I found the peer ~n");
+                               false -> lager:error("LASPVIN forward request to peers")
+                            end;
+                         false -> lager:error("LASPVIN I found the peer ~n")
+                      end;
                    false -> lager:error("LASPVIN send to peers")
                 end;
              "c2" ->
                 case ets:member(c2, "peer") of
                    true ->
-                      lager:error("LASPVIN I found the peer ~n");
+                      case lists:member(From, ets:lookup_element(c2, "peer", 2)) of
+                         true -> 
+                            case length(ets:lookup_element(c2, "peer", 2)) > 1 of
+                               true -> lager:error("LASPVIN I found the peer ~n");
+                               false -> lager:error("LASPVIN forward request to peers ~n")
+                            end;
+                         false -> lager:error("LASPVIN I found the peer")
+                      end;
                    false -> 
                       case ets:member(c1, "peer") of
                          true -> lager:error("LASPVIN found the peer");
