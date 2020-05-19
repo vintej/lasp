@@ -243,11 +243,11 @@ handle_cast({find_sub, From, ReqRate, Id}, #state{store=Store}=State) ->
                          true -> 
                             case length(ets:lookup_element(c1, "peer", 2)) > 1 of
                                true -> lager:error("LASPVIN I found the peer ~n");
-                               false -> lager:error("LASPVIN forward request to peers")
+                               false -> lager:error("LASPVIN forward request to peers"), forward_sub_req()
                             end;
                          false -> lager:error("LASPVIN I found the peer ~n")
                       end;
-                   false -> lager:error("LASPVIN send to peers")
+                   false -> lager:error("LASPVIN send to peers"), forward_sub_req()
                 end;
              "c2" ->
                 case ets:member(c2, "peer") of
@@ -256,14 +256,14 @@ handle_cast({find_sub, From, ReqRate, Id}, #state{store=Store}=State) ->
                          true -> 
                             case length(ets:lookup_element(c2, "peer", 2)) > 1 of
                                true -> lager:error("LASPVIN I found the peer ~n");
-                               false -> lager:error("LASPVIN forward request to peers ~n")
+                               false -> lager:error("LASPVIN forward request to peers ~n"), forward_sub_req()
                             end;
                          false -> lager:error("LASPVIN I found the peer")
                       end;
                    false -> 
                       case ets:member(c1, "peer") of
                          true -> lager:error("LASPVIN found the peer");
-                         false -> lager:error("LASPVIN send to peers")
+                         false -> lager:error("LASPVIN send to peers"), forward_sub_req()
                       end
                 end
           end
@@ -579,16 +579,17 @@ check_subscription() ->
                    false ->
                       case ets:member(find_sub, ets:lookup_element(peer_rates, "self_rate", 2)) of
                          true -> lager:error("Find_sub_req exists for the class");
-                         false -> find_sub_req()
+                         false -> 
+                            ets:insert(find_sub, [{"c1", erlang:atom_to_list(lasp_support:mynode())++"c1", lasp_support:mynode()}]), 
+                            forward_sub_req()
                       end
                 end
           end
     end.
 
 %%private
-find_sub_req() ->
+forward_sub_req() ->
    lager:error("LASPVIN no c1 peer to subscribe forwarding to peers ~n"),
-   ets:insert(find_sub, [{"c1", erlang:atom_to_list(lasp_support:mynode())++"c1", lasp_support:mynode()}]),
    lists:foreach(fun(Peer) ->
       case lists:member(Peer, ets:lookup_element(find_sub, "c1", 3)) of
          true -> ok;
