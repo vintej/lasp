@@ -1007,7 +1007,8 @@ receive_value(Store, {state_send, Origin, {Id, Type, Metadata, Value},
 -spec receive_delta(store(), {delta_send, node(), value(), function(), function()} |
                              {delta_ack, id(), node(), non_neg_integer()} |
                              {rate_class, node(), string()} |
-                             {rate_subscribe, node(), string()})->
+                             {rate_subscribe, node(), string()}|
+                             {find_sub, node(), string(), string()})->
     ok | error.
 receive_delta(Store, {delta_send, Origin, {Id, Type, Metadata, Deltas},
                       MetadataFunBind, MetadataFunDeclare}) ->
@@ -1054,10 +1055,14 @@ receive_delta(Store, {delta_ack, Id, From, Counter}) ->
     end;
 
 receive_delta(Store, {rate_class, From, Rate}) ->
-    lager:error("LASPVIN received rate_class with From:~p Rate:~p for Store:~p", [From, Rate, Store]);
+    lager:debug("LASPVIN received rate_class with From:~p Rate:~p for Store:~p", [From, Rate, Store]);
 
 receive_delta(Store, {rate_subscribe, From, Rate}) ->
-    lager:error("LASPVIN received rate_subscribe with From:~p Rate:~p for Store:~p", [From, Rate, Store]).
+    lager:debug("LASPVIN received rate_subscribe with From:~p Rate:~p for Store:~p", [From, Rate, Store]);
+
+receive_delta(Store, {find_sub, From, ReqRate, Id}) ->
+    lager:debug("LASPVIN received find_sub with From:~p ReqRate:~p Id:~p for Store::~p", [From, ReqRate, Id, Store]).
+
 
 
 %% Internal functions.

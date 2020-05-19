@@ -240,7 +240,7 @@ handle_cast({find_sub, From, ReqRate, Id}, #state{store=Store}=State) ->
                 case ets:member(c1, "peer") of
                    true ->
                       lager:error("LASPVIN I found the peer ~n");
-                   false -> lager:error("LASPVIN send to peers"), ok
+                   false -> lager:error("LASPVIN send to peers")
                 end;
              "c2" ->
                 case ets:member(c2, "peer") of
@@ -249,9 +249,11 @@ handle_cast({find_sub, From, ReqRate, Id}, #state{store=Store}=State) ->
                    false -> 
                       case ets:member(c1, "peer") of
                          true -> lager:error("LASPVIN found the peer");
-                         false -> "LASPVIN send to peers", ok
-                   end
+                         false -> lager:error("LASPVIN send to peers")
+                      end
                 end
+          end
+    end,
     {noreply, State};
 
 handle_cast({rate_ack, From, Rate}, #state{store=Store}=State) ->
@@ -510,10 +512,10 @@ init_delta_sync(Peer, ObjectFilterFun) ->
 
 %% @private
 check_member_list(RateList, Member, Role) ->
-     case ets:member(RateList, Role) of
-        true -> lists:member(Member, ets:lookup_element(RateList, Role, 2));
-        false -> ets:member(RateList, Role)
-     end.
+    case ets:member(RateList, Role) of
+       true -> lists:member(Member, ets:lookup_element(RateList, Role, 2));
+       false -> ets:member(RateList, Role)
+    end.
 
 %% @private
 get_peers() ->
@@ -554,10 +556,10 @@ check_subscription() ->
                       lists:foreach(fun(Peer) ->
                          case lists:member(Peer, ets:lookup_element(find_sub, "c1", 3)) of
                             true -> ok;
-                            false -> ?SYNC_BACKEND:send(?MODULE, {find_sub, lasp_support:mynode(), "c1", lasp_support:mynode()++"c1"}, From)
+                            false -> ?SYNC_BACKEND:send(?MODULE, {find_sub, lasp_support:mynode(), "c1", lasp_support:mynode()++"c1"}, Peer)
                          end
                       end,
-                      get_peers()), 
+                      get_peers()) 
                 end
           end
     end.
