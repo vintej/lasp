@@ -227,6 +227,7 @@ handle_cast({delta_ack, From, Id, Counter}, #state{store=Store}=State) ->
 handle_cast({find_sub, From, ReqRate, Id}, #state{store=Store}=State) ->
     lasp_marathon_simulations:log_message_queue_size("find_sub"),
     lager:debug("LASPVIN store:~p ~n", [Store]),
+    lager:error("LASPVIN received find_sub Id: ~p From: ~p ~n", [Id, From]),
     case ets:member(find_sub, ReqRate) of
        true ->
           case lists:member(Id, ets:lookup_element(find_sub, ReqRate, 2)) of
