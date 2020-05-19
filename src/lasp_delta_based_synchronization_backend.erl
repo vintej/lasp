@@ -231,11 +231,11 @@ handle_cast({find_sub_aq, Id, From}, #state{store=Store}=State) ->
     lasp_marathon_simulations:log_message_queue_size("find_sub_aq"),
     lager:debug("LASPVIN Store ~p ~n",[Store]),
     lager:error("LASPVIN received find_sub_aq for Id:~p From:~p ~n", [Id, From]),
-    case lists:nth(1, lists:nth(1,ets:match(c3, {'_', Id, '$1'}))) == lasp_support:mynode() of
+    case lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1'}))) == lasp_support:mynode() of
        true -> lager:error("LASPVIN Got path Test2 completed");
        false -> 
           ets:insert(find_sub_aq, [{Id, From}]),
-          ?SYNC_BACKEND:send(?MODULE, {find_sub_aq, Id, lasp_support:mynode()}, lists:nth(1, lists:nth(1,ets:match(c3, {'_', Id, '$1'}))))
+          ?SYNC_BACKEND:send(?MODULE, {find_sub_aq, Id, lasp_support:mynode()}, lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1'}))))
     end,
     {noreply, State};
 
@@ -251,7 +251,7 @@ handle_cast({find_sub, From, ReqRate, Id}, #state{store=Store}=State) ->
                 lager:error("LASPVIN Matching find_sub rates found~n"),
                 lager:error("LASPVIN find_sub:insert ReqRate:~p Id:~p From:~p ~n", [ReqRate, Id, From]),
                 ets:insert(find_sub, [{ReqRate, Id, From}]),
-                ?SYNC_BACKEND:send(?MODULE, {find_sub_aq, Id, lasp_support:mynode()}, lists:nth(1, lists:nth(1,ets:match(c3, {'_', Id, '$1'}))))
+                ?SYNC_BACKEND:send(?MODULE, {find_sub_aq, Id, lasp_support:mynode()}, lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1'}))))
           end;
        false ->
           ets:insert(find_sub, {ReqRate, Id, From}),
@@ -265,10 +265,10 @@ handle_cast({find_sub, From, ReqRate, Id}, #state{store=Store}=State) ->
                       case lists:member(From, ets:lookup_element(c1, "peer", 2)) of
                          true -> 
                             case length(ets:lookup_element(c1, "peer", 2)) > 1 of
-                               true -> lager:error("LASPVIN I found the peer ~n"), ?SYNC_BACKEND:send(?MODULE, {find_sub_aq, Id, lasp_support:mynode()}, lists:nth(1, lists:nth(1,ets:match(c3, {'_', Id, '$1'}))));
+                               true -> lager:error("LASPVIN I found the peer ~n"), ?SYNC_BACKEND:send(?MODULE, {find_sub_aq, Id, lasp_support:mynode()}, lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1'}))));
                                false -> lager:error("LASPVIN forward request to peers"), forward_sub_req(Id)
                             end;
-                         false -> lager:error("LASPVIN I found the peer ~n"), ?SYNC_BACKEND:send(?MODULE, {find_sub_aq, Id, lasp_support:mynode()}, lists:nth(1, lists:nth(1,ets:match(c3, {'_', Id, '$1'}))))
+                         false -> lager:error("LASPVIN I found the peer ~n"), ?SYNC_BACKEND:send(?MODULE, {find_sub_aq, Id, lasp_support:mynode()}, lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1'}))))
                       end;
                    false -> lager:error("LASPVIN send to peers"), forward_sub_req(Id)
                 end;
@@ -278,14 +278,14 @@ handle_cast({find_sub, From, ReqRate, Id}, #state{store=Store}=State) ->
                       case lists:member(From, ets:lookup_element(c2, "peer", 2)) of
                          true -> 
                             case length(ets:lookup_element(c2, "peer", 2)) > 1 of
-                               true -> lager:error("LASPVIN I found the peer ~n"), ?SYNC_BACKEND:send(?MODULE, {find_sub_aq, Id, lasp_support:mynode()}, lists:nth(1, lists:nth(1,ets:match(c3, {'_', Id, '$1'}))));
+                               true -> lager:error("LASPVIN I found the peer ~n"), ?SYNC_BACKEND:send(?MODULE, {find_sub_aq, Id, lasp_support:mynode()}, lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1'}))));
                                false -> lager:error("LASPVIN forward request to peers ~n"), forward_sub_req(Id)
                             end;
-                         false -> lager:error("LASPVIN I found the peer"), ?SYNC_BACKEND:send(?MODULE, {find_sub_aq, Id, lasp_support:mynode()}, lists:nth(1, lists:nth(1,ets:match(c3, {'_', Id, '$1'}))))
+                         false -> lager:error("LASPVIN I found the peer"), ?SYNC_BACKEND:send(?MODULE, {find_sub_aq, Id, lasp_support:mynode()}, lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1'}))))
                       end;
                    false -> 
                       case ets:member(c1, "peer") of
-                         true -> lager:error("LASPVIN found the peer"), ?SYNC_BACKEND:send(?MODULE, {find_sub_aq, Id, lasp_support:mynode()}, lists:nth(1, lists:nth(1,ets:match(c3, {'_', Id, '$1'}))));
+                         true -> lager:error("LASPVIN found the peer"), ?SYNC_BACKEND:send(?MODULE, {find_sub_aq, Id, lasp_support:mynode()}, lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1'}))));
                          false -> lager:error("LASPVIN send to peers"), forward_sub_req(Id)
                       end
                 end
