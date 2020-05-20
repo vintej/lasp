@@ -64,6 +64,8 @@ extract_log_type_and_payload({rate_subscribe, Node, Rate}) ->
 extract_log_type_and_payload({find_sub, Node, Rate, Id}) ->
     [{delta_send_protocol, {Node, Rate, Id}}];
 extract_log_type_and_payload({find_sub_aq, Id, Node}) ->
+    [{delta_send_protocol, {Id, Node}}];
+extract_log_type_and_payload({find_sub_aq_lock, Id, Node}) ->
     [{delta_send_protocol, {Id, Node}}].
 
 %%%===================================================================
@@ -232,10 +234,31 @@ handle_cast({find_sub_aq, Id, From}, #state{store=Store}=State) ->
     lager:debug("LASPVIN Store ~p ~n",[Store]),
     lager:error("LASPVIN received find_sub_aq for Id:~p From:~p ~n", [Id, From]),
     case lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1'}))) == lasp_support:mynode() of
-       true -> lager:error("LASPVIN Got path Test2 completed");
+       true -> 
+           lager:error("LASPVIN Got path Test2 completed"),
+           ets:insert(find_sub_aq, [{Id, From}]),
+           ?SYNC_BACKEND:send(?MODULE, {find_sub_aq_lock, Id, lasp_support:mynode()}, From);
        false -> 
           ets:insert(find_sub_aq, [{Id, From}]),
           ?SYNC_BACKEND:send(?MODULE, {find_sub_aq, Id, lasp_support:mynode()}, lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1'}))))
+    end,
+    {noreply, State};
+
+handle_cast({find_sub_aq_lock, Id, From}, #state{store=Store}=State) ->
+    lasp_marathon_simulations:log_message_queue_size("find_sub_aq_lock"),
+    lager:debug("LASPVIN Store ~p ~n",[Store]),
+    lager:error("LASPVIN received find_sub_aq_lock for Id:~p From:~p ~n", [Id, From]),
+    ets:update_element(peer_rates, "self_rate", {2, lists:nth(1, lists:nth(1,ets:match(find_sub, {'$1', Id, '_'})))}),
+    %propagate update_rate for all? may be at the end of the function,
+    case ets:lookup_element(find_sub_aq, Id, 2) == lasp_support:mynode() of
+       true ->
+           %check find_sub if there are any other nodes requiring same rate,
+           %if there are inform them 
+           lager:error("LASPVIN Locking reached chain end");
+       false -> 
+          %pass on the lock & delete find_sub_aq entry
+          ?SYNC_BACKEND:send(?MODULE, {find_sub_aq_lock, Id, lasp_support:mynode()},ets:lookup_element(find_sub_aq, Id, 2)),
+          ets:delete(find_sub_aq, Id)
     end,
     {noreply, State};
 
