@@ -257,11 +257,9 @@ handle_cast({find_sub_aq_lock, Id, From}, #state{store=Store}=State) ->
     lasp_marathon_simulations:log_message_queue_size("find_sub_aq_lock"),
     lager:debug("LASPVIN Store ~p ~n",[Store]),
     lager:error("LASPVIN received find_sub_aq_lock for Id:~p From:~p ~n", [Id, From]),
-    case ets:member(find_sub_aq, Id) of
-        true ->
-            ets:update_element(peer_rates, "self_rate", {2, lists:nth(1, lists:nth(1,ets:match(find_sub, {'$1', Id, '_'})))}),
-            %propagate update_rate for all? may be at the end of the function,
-            case ets:lookup_element(find_sub_aq, Id, 2) == lasp_support:mynode() of
+    ets:update_element(peer_rates, "self_rate", {2, lists:nth(1, lists:nth(1,ets:match(find_sub, {'$1', Id, '_'})))}),
+    %propagate update_rate for all? may be at the end of the function,
+    case ets:lookup_element(find_sub_aq, Id, 2) == lasp_support:mynode() of
                 true ->
                     %check find_sub if there are any other nodes requiring same rate,
                     %if there are inform them 
@@ -270,12 +268,9 @@ handle_cast({find_sub_aq_lock, Id, From}, #state{store=Store}=State) ->
                     %pass on the lock & delete find_sub_aq entry
                     ?SYNC_BACKEND:send(?MODULE, {find_sub_aq_lock, Id, lasp_support:mynode()},ets:lookup_element(find_sub_aq, Id, 2))
                     %ets:delete(find_sub_aq, Id)
-            end,
-            ets:delete_all_objects(rate_ack),
-            ets:delete(find_sub, lists:nth(1,lists:nth(1,ets:match(find_sub, {'$1', Id, '_'}))));
-        false ->
-            ok
     end,
+    ets:delete_all_objects(rate_ack),
+    ets:delete(find_sub, lists:nth(1,lists:nth(1,ets:match(find_sub, {'$1', Id, '_'})))),
     {noreply, State};
 
 handle_cast({find_sub, From, ReqRate, Id}, #state{store=Store}=State) ->
@@ -696,8 +691,13 @@ forward_sub_req(Id) ->
 %%private
 found_sub(Id) ->
     lager:error("LASPVIN found the peer"),
-    ets:insert(find_sub_aq, [{Id, lasp_support:mynode()}]),
-    ?SYNC_BACKEND:send(?MODULE, {find_sub_aq, Id, lasp_support:mynode()}, lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1'})))).
+    case ets:memeber(find_sub_aq, Id) of
+        true ->
+            ets:insert(find_sub_aq, [{Id, lasp_support:mynode()}]),
+            ?SYNC_BACKEND:send(?MODULE, {find_sub_aq, Id, lasp_support:mynode()}, lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1'}))));
+        false ->
+            ok
+    end.
 
 %% @private
 lists_min([]) -> 0;
