@@ -233,7 +233,7 @@ handle_cast({find_sub_aq, Id, From}, #state{store=Store}=State) ->
     lasp_marathon_simulations:log_message_queue_size("find_sub_aq"),
     lager:debug("LASPVIN Store ~p ~n",[Store]),
     lager:error("LASPVIN received find_sub_aq for Id:~p From:~p ~n", [Id, From]),
-    case ets:member(find_sub, string:substr(Id, string:length(Id)-1, string:length(Id))) of
+    case ets:member(find_sub_aq, Id) of
         true ->
             case lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1'}))) == lasp_support:mynode() of
                 true ->
@@ -268,8 +268,8 @@ handle_cast({find_sub_aq_lock, Id, From}, #state{store=Store}=State) ->
                     lager:error("LASPVIN Locking reached chain end");
                 false ->
                     %pass on the lock & delete find_sub_aq entry
-                    ?SYNC_BACKEND:send(?MODULE, {find_sub_aq_lock, Id, lasp_support:mynode()},ets:lookup_element(find_sub_aq, Id, 2)),
-                    ets:delete(find_sub_aq, Id)
+                    ?SYNC_BACKEND:send(?MODULE, {find_sub_aq_lock, Id, lasp_support:mynode()},ets:lookup_element(find_sub_aq, Id, 2))
+                    %ets:delete(find_sub_aq, Id)
             end,
             ets:delete_all_objects(rate_ack),
             ets:delete(find_sub, lists:nth(1,lists:nth(1,ets:match(find_sub, {'$1', Id, '_'}))));
