@@ -233,18 +233,23 @@ handle_cast({find_sub_aq, Id, From}, #state{store=Store}=State) ->
     lasp_marathon_simulations:log_message_queue_size("find_sub_aq"),
     lager:debug("LASPVIN Store ~p ~n",[Store]),
     lager:error("LASPVIN received find_sub_aq for Id:~p From:~p ~n", [Id, From]),
-    case lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1'}))) == lasp_support:mynode() of
-       true ->
-           case ets:member(find_sub_aq, Id) of
-               true -> lager:error("LASPVIN Path already exists");
-               false ->
-                   lager:error("LASPVIN Got path Test2 completed"),
-                   ets:insert(find_sub_aq, [{Id, From}]),
-                   ?SYNC_BACKEND:send(?MODULE, {find_sub_aq_lock, Id, lasp_support:mynode()}, From)
+    case ets:member(find_sub, string:substr(Id, string:length(Id)-1, string:length(Id))) of
+        true ->
+            case lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1'}))) == lasp_support:mynode() of
+                true ->
+                    case ets:member(find_sub_aq, Id) of
+                        true -> lager:error("LASPVIN Path already exists");
+                        false ->
+                            lager:error("LASPVIN Got path Test2 completed"),
+                            ets:insert(find_sub_aq, [{Id, From}]),
+                            ?SYNC_BACKEND:send(?MODULE, {find_sub_aq_lock, Id, lasp_support:mynode()}, From)
+                    end;
+                false -> 
+                    ets:insert(find_sub_aq, [{Id, From}]),
+                    ?SYNC_BACKEND:send(?MODULE, {find_sub_aq, Id, lasp_support:mynode()}, lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1'}))))
             end;
-       false -> 
-          ets:insert(find_sub_aq, [{Id, From}]),
-          ?SYNC_BACKEND:send(?MODULE, {find_sub_aq, Id, lasp_support:mynode()}, lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1'}))))
+        false ->
+            ok
     end,
     {noreply, State};
 
