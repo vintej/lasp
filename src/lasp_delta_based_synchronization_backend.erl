@@ -99,9 +99,11 @@ init([Store, Actor]) ->
     ets:new(find_sub, [named_table, bag, public]),
     ets:new(find_sub_aq, [ordered_set, named_table, public]),
     lager:debug("LASPVIN test"),
-    schedule_delta_synchronization(),
+    %schedule_delta_synchronization(),
+    schedule_rate_propagation(),
     schedule_delta_garbage_collection(),
     schedule_rate_class_info_propagation(),
+    schedule_rate_propagation(),
 
     {ok, #state{actor=Actor, gossip_peers=[], store=Store}}.
 
@@ -466,6 +468,13 @@ handle_info(rate_info, #state{store=Store}=State) ->
     schedule_rate_class_info_propagation(),
     {noreply, State};
 
+handle_info(rate_prop_c1, #state{store=Store}=State) ->
+    lager:error("LASPVIN timestamp: ~p ~n", [erlang:timestamp()]),
+    lager:debug("LASPVIN Store: ~p State:~p ~n", [Store, State]),
+    propagate_by_class(c1),
+    schedule_rate_propagation(),
+    {noreply, State};
+
 handle_info(_Msg, State) ->
     {noreply, State}.
 
@@ -627,6 +636,39 @@ schedule_rate_class_info_propagation() ->
     lager:debug("LASPVIN test"),
     timer:send_after(10000, rate_info).
 
+%% @private
+schedule_rate_propagation() ->
+    lager:debug("LASPVIN test"),
+    %5000 milliseconds is 5 seconds
+    timer:send_after(5000, rate_prop_c1).
+
+%% @private
+propagate_by_class(Class) ->
+    lasp_logger:extended("Beginning delta synchronization by class."),
+
+    
+    %% Ship buffered updates for the fanout value.
+    FilterWithoutConvergenceFun = fun(Id, _) ->
+                              Id =/= ?SIM_STATUS_STRUCTURE
+                      end,
+    lists:foreach(fun(Peer) ->
+                          init_delta_sync(Peer, FilterWithoutConvergenceFun) end,
+                  get_subscribers(Class)),
+
+    %% Synchronize convergence structure.
+    FilterWithConvergenceFun = fun(Id, _) ->
+                              Id =:= ?SIM_STATUS_STRUCTURE
+                      end,
+    lists:foreach(fun(Peer) ->
+                          init_delta_sync(Peer, FilterWithConvergenceFun) end,
+                  get_subscribers(Class)),
+
+    %% Schedule next synchronization.
+    schedule_delta_synchronization().
+
+%% @private
+get_subscribers(Class) ->
+    ets:lookup_element(Class, "subscriber", 2).
 
 %% @private
 init_delta_sync(Peer, ObjectFilterFun) ->
