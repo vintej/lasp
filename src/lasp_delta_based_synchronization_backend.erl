@@ -235,6 +235,8 @@ handle_cast({find_sub_aq, Id, From}, #state{store=Store}=State) ->
     lager:error("LASPVIN received find_sub_aq for Id:~p From:~p ~n", [Id, From]),
     case ets:member(find_sub_aq, Id) of
         true ->
+            ok;
+        false ->
             case lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1'}))) == lasp_support:mynode() of
                 true ->
                     case ets:member(find_sub_aq, Id) of
@@ -247,9 +249,7 @@ handle_cast({find_sub_aq, Id, From}, #state{store=Store}=State) ->
                 false -> 
                     ets:insert(find_sub_aq, [{Id, From}]),
                     ?SYNC_BACKEND:send(?MODULE, {find_sub_aq, Id, lasp_support:mynode()}, lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1'}))))
-            end;
-        false ->
-            ok
+            end
     end,
     {noreply, State};
 
