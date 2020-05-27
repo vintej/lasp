@@ -471,7 +471,10 @@ handle_info(rate_info, #state{store=Store}=State) ->
 handle_info(rate_prop_c1, #state{store=Store}=State) ->
     lager:error("LASPVIN timestamp: ~p ~n", [erlang:timestamp()]),
     lager:debug("LASPVIN Store: ~p State:~p ~n", [Store, State]),
-    propagate_by_class(c1),
+    case ets:member(c1, "peer") of
+        true -> propagate_by_class(c1);
+        false -> lager:error("LASPVIN no c1 peers")
+    end,
     schedule_rate_propagation(),
     {noreply, State};
 
@@ -668,7 +671,7 @@ propagate_by_class(Class) ->
 
 %% @private
 get_subscribers(Class) ->
-    ets:lookup_element(Class, "subscriber", 2).
+    ets:lookup_element(Class, "peer", 2).
 
 %% @private
 init_delta_sync(Peer, ObjectFilterFun) ->
