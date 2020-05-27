@@ -666,7 +666,7 @@ propagate_by_class(Class) ->
                   get_subscribers(Class)),
 
     %% Schedule next synchronization.
-    schedule_delta_synchronization().
+    schedule_rate_propagation().
 
 %% @private
 get_subscribers(Class) ->
