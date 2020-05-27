@@ -693,10 +693,10 @@ found_sub(Id) ->
     lager:error("LASPVIN found the peer"),
     case ets:member(find_sub_aq, Id) of
         true ->
-            ets:insert(find_sub_aq, [{Id, lasp_support:mynode()}]),
-            ?SYNC_BACKEND:send(?MODULE, {find_sub_aq, Id, lasp_support:mynode()}, lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1'}))));
+            ok;
         false ->
-            ok
+            ets:insert(find_sub_aq, [{Id, lasp_support:mynode()}]),
+            ?SYNC_BACKEND:send(?MODULE, {find_sub_aq, Id, lasp_support:mynode()}, lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1'}))))
     end.
 
 %% @private
