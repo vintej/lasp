@@ -207,6 +207,7 @@ handle_cast({delta_send, From, {Id, Type, _Metadata, Deltas}, Counter},
                                                ?CLOCK_INIT(Actor)})
              end),
     lasp_logger:extended("Receiving delta took: ~p microseconds.", [Time]),
+    lager:error("LASPVIN Received delta at TimeStamp: ~p ~n", [time_stamp()]),
 
     %% Acknowledge message.
     ?SYNC_BACKEND:send(?MODULE, {delta_ack, lasp_support:mynode(), Id, Counter}, From),
@@ -562,6 +563,12 @@ peer_rate_insert(From, Rate) ->
                     false -> ets:insert(c3, [{"peer", From}])
                  end
     end.
+
+%% @private
+time_stamp() ->
+    {{Year, Month, Day}, {Hour, Minute, Second}} = calendar:now_to_datetime(erlang:now()),
+    lists:flatten(io_lib:format("~4..0w-~2..0w-~2..0wT~2..0w:~2..0w:~2..0w",[Year,Month,Day,Hour,Minute,Second])).
+
 %% @private
 peer_rate_update(From, NewRate, OldRate) ->
     case OldRate of
