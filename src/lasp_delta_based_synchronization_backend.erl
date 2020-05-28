@@ -182,6 +182,7 @@ handle_cast({delta_send, From, {Id, Type, _Metadata, Deltas}, Counter},
                                                ?CLOCK_INIT(Actor)})
              end),
     lasp_logger:extended("Receiving delta took: ~p microseconds.", [Time]),
+    lager:error("LASPVIN Recevied delta took: ~p microseconds at TimeStamp: ~p ~n", [Time, time_stamp()]),
 
     %% Acknowledge message.
     ?SYNC_BACKEND:send(?MODULE, {delta_ack, lasp_support:mynode(), Id, Counter}, From),
@@ -348,6 +349,11 @@ schedule_delta_synchronization() ->
         false ->
             ok
     end.
+
+%% @private
+time_stamp() ->
+    {{Year, Month, Day}, {Hour, Minute, Second}} = calendar:now_to_datetime(erlang:now()),
+    lists:flatten(io_lib:format("~4..0w-~2..0w-~2..0wT~2..0w:~2..0w:~2..0w",[Year,Month,Day,Hour,Minute,Second])).
 
 %% @private
 schedule_delta_garbage_collection() ->
