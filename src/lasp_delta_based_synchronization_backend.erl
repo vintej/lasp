@@ -104,6 +104,7 @@ init([Store, Actor]) ->
     schedule_rate_class_info_propagation(),
     schedule_rate_propagation_c1(),
     schedule_rate_propagation_c2(),
+    schedule_rate_propagation_c3(),
 
     {ok, #state{actor=Actor, gossip_peers=[], store=Store}}.
 
@@ -137,15 +138,15 @@ handle_cast({delta_exchange, Peer, ObjectFilterFun},
     lasp_marathon_simulations:log_message_queue_size("delta_exchange"),
 
     lasp_logger:extended("Exchange starting for ~p", [Peer]),
-    lager:error("LASPVIN COming to delta_exch for Peer:~p ~n", [Peer]),
+    lager:debug("LASPVIN COming to delta_exch for Peer:~p ~n", [Peer]),
 
     Mutator = fun({Id, #dv{value=Value, type=Type, metadata=Metadata,
                            delta_counter=Counter, delta_map=DeltaMap,
                            delta_ack_map=AckMap0}=Object}) ->
-        lager:error("LASPVIN Inside mutator ~n"),
+        lager:debug("LASPVIN Inside mutator ~n"),
         case ObjectFilterFun(Id, Metadata) of
             true ->
-                lager:error("LASPVIN ObjectFilterFun True Id:~p Meta:~p ~n", [Id, Metadata]),
+                lager:debug("LASPVIN ObjectFilterFun True Id:~p Meta:~p ~n", [Id, Metadata]),
                 Ack = case orddict:find(Peer, AckMap0) of
                     {ok, {Ack0, _GCCounter}} ->
                         Ack0;
@@ -168,7 +169,7 @@ handle_cast({delta_exchange, Peer, ObjectFilterFun},
 
                 AckMap = case Ack < Counter orelse ClientInReactiveMode of
                     true ->
-                        lager:error("LASPVIN Ackmap True sending now ~n"),
+                        lager:debug("LASPVIN Ackmap True sending now ~n"),
                         ?SYNC_BACKEND:send(?MODULE, {delta_send, lasp_support:mynode(), {Id, Type, Metadata, Deltas}, Counter}, Peer),
 
                         orddict:map(
@@ -183,13 +184,13 @@ handle_cast({delta_exchange, Peer, ObjectFilterFun},
                             AckMap0
                         );
                     false ->
-                        lager:error("LASPVIN AckMap False skipping~n"),
+                        lager:debug("LASPVIN AckMap False skipping~n"),
                         AckMap0
                 end,
 
                 {Object#dv{delta_ack_map=AckMap}, Id};
             false ->
-                lager:error("LASPVIN ObjectFilterFun False Id:~p Meta:~p ~n", [Id, Metadata]),
+                lager:debug("LASPVIN ObjectFilterFun False Id:~p Meta:~p ~n", [Id, Metadata]),
                 {Object, skip}
         end
     end,
@@ -198,7 +199,7 @@ handle_cast({delta_exchange, Peer, ObjectFilterFun},
     {ok, _} = lasp_storage_backend:update_all(Store, Mutator),
 
     lasp_logger:extended("Exchange finished for ~p", [Peer]),
-    lager:error("Exchange finished~n"),
+    lager:debug("Exchange finished~n"),
 
     {noreply, State};
 
@@ -214,7 +215,7 @@ handle_cast({delta_send, From, {Id, Type, _Metadata, Deltas}, Counter},
                                                ?CLOCK_INIT(Actor)})
              end),
     lasp_logger:extended("Receiving delta took: ~p microseconds.", [Time]),
-    lager:error("LASPVIN Received delta From:~p at TimeStamp: ~p ~n", [From, time_stamp()]),
+    lager:error("LASPVIN Received delta From=~p at TimeStamp=~p Took=~p microseconds ~n", [From, time_stamp(), Time]),
 
     %% Acknowledge message.
     ?SYNC_BACKEND:send(?MODULE, {delta_ack, lasp_support:mynode(), Id, Counter}, From),
@@ -242,7 +243,7 @@ handle_cast({delta_ack, From, Id, Counter}, #state{store=Store}=State) ->
 handle_cast({find_sub_aq, Id, From}, #state{store=Store}=State) ->
     lasp_marathon_simulations:log_message_queue_size("find_sub_aq"),
     lager:debug("LASPVIN Store ~p ~n",[Store]),
-    lager:error("LASPVIN received find_sub_aq for Id:~p From:~p ~n", [Id, From]),
+    lager:debug("LASPVIN received find_sub_aq for Id:~p From:~p ~n", [Id, From]),
     case ets:member(find_sub_aq, Id) of
         true ->
             ok;
@@ -250,9 +251,9 @@ handle_cast({find_sub_aq, Id, From}, #state{store=Store}=State) ->
             case lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1'}))) == lasp_support:mynode() of
                 true ->
                     case ets:member(find_sub_aq, Id) of
-                        true -> lager:error("LASPVIN Path already exists");
+                        true -> lager:debug("LASPVIN Path already exists");
                         false ->
-                            lager:error("LASPVIN Got path Test2 completed"),
+                            lager:error("LASPVIN Got path"),
                             ets:insert(find_sub_aq, [{Id, From}]),
                             ?SYNC_BACKEND:send(?MODULE, {find_sub_aq_lock, Id, lasp_support:mynode()}, From)
                     end;
@@ -266,14 +267,17 @@ handle_cast({find_sub_aq, Id, From}, #state{store=Store}=State) ->
 handle_cast({find_sub_aq_lock, Id, From}, #state{store=Store}=State) ->
     lasp_marathon_simulations:log_message_queue_size("find_sub_aq_lock"),
     lager:debug("LASPVIN Store ~p ~n",[Store]),
-    lager:error("LASPVIN received find_sub_aq_lock for Id:~p From:~p ~n", [Id, From]),
+    lager:debug("LASPVIN received find_sub_aq_lock for Id:~p From:~p ~n", [Id, From]),
     case ets:lookup_element(peer_rates, "self_rate", 2)==lists:nth(1,lists:nth(1,ets:match(find_sub, {'$1',Id, '_' }))) of
         true ->
-            lager:error("LASPVIN Rate updated already ~n"),
+            lager:debug("LASPVIN Rate updated already ~n"),
             ok;
         false ->
-            lager:error("LASPVIN updating rate ~n"),
+            lager:debug("LASPVIN updating rate ~n"),
             ets:update_element(peer_rates, "self_rate", {2, lists:nth(1, lists:nth(1,ets:match(find_sub, {'$1', Id, '_'})))}),
+            %Update scubscription if not already subscribed to c1
+            %ets:insert(peer_rates, [{"subscription", lists:nth(1, ets:lookup_element(c1, "peer", 2))}]),
+            %?SYNC_BACKEND:send(?MODULE, {rate_subscribe, lasp_support:mynode(), ets:lookup_element(peer_rates, "self_rate", 2)}, lists:nth(1, ets:lookup_element(c1, "peer", 2)))
             %propagate update_rate for all? may be at the end of the function,
             case ets:lookup_element(find_sub_aq, Id, 2) == lasp_support:mynode() of
                 true ->
@@ -293,7 +297,7 @@ handle_cast({find_sub_aq_lock, Id, From}, #state{store=Store}=State) ->
 handle_cast({find_sub, From, ReqRate, Id}, #state{store=Store}=State) ->
     lasp_marathon_simulations:log_message_queue_size("find_sub"),
     lager:debug("LASPVIN store:~p ~n", [Store]),
-    lager:error("LASPVIN received find_sub Id: ~p From: ~p ~n", [Id, From]),
+    lager:debug("LASPVIN received find_sub Id: ~p From: ~p ~n", [Id, From]),
     check_sub_exists(From, ReqRate, Id),
     {noreply, State};
 
@@ -341,7 +345,7 @@ handle_cast({rate_class, From, Rate}, #state{store=Store}=State) ->
                   lists:foreach(fun(ReqRate) ->
                           case From == lists:nth(1,ets:lookup_element(find_sub, lists:nth(1,ReqRate), 3)) of
                              true -> ok;
-                             false ->lager:error("LASPVIN sent find_sub req ~n"), ?SYNC_BACKEND:send(?MODULE, {find_sub, lasp_support:mynode(), lists:nth(1,ReqRate), lists:nth(1,ets:lookup_element(find_sub, lists:nth(1,ReqRate), 2))}, From)
+                             false ->lager:debug("LASPVIN sent find_sub req ~n"), ?SYNC_BACKEND:send(?MODULE, {find_sub, lasp_support:mynode(), lists:nth(1,ReqRate), lists:nth(1,ets:lookup_element(find_sub, lists:nth(1,ReqRate), 2))}, From)
                           end
                         end,
                   lists:usort(ets:match(find_sub, {'$1', '_', '_'})))
@@ -480,7 +484,7 @@ handle_info(rate_prop_c1, #state{store=Store}=State) ->
     lager:debug("LASPVIN Store: ~p State:~p ~n", [Store, State]),
     case ets:member(c1, "peer") of
         true -> propagate_by_class(c1, "peer");
-        false -> lager:error("LASPVIN no c1 peers for propagation")
+        false -> lager:debug("LASPVIN no c1 peers for propagation")
     end,
     schedule_rate_propagation_c1(),
     {noreply, State};
@@ -489,11 +493,20 @@ handle_info(rate_prop_c2, #state{store=Store}=State) ->
     lager:debug("LASPVIN Store: ~p State:~p ~n", [Store, State]),
     case ets:member(c2, "subscriber") of
         true -> propagate_by_class(c2, "subscriber");
-        false -> lager:error("LASPVIN no c2 subscriber for propagation")
+        false -> lager:debug("LASPVIN no c2 subscriber for propagation")
     end,
     schedule_rate_propagation_c2(),
     {noreply, State};
 
+
+handle_info(rate_prop_c3, #state{store=Store}=State) ->
+    lager:debug("LASPVIN Store: ~p State:~p ~n", [Store, State]),
+    case ets:member(c3, "subscriber") of
+        true -> propagate_by_class(c3, "subscriber");
+        false -> lager:debug("LASPVIN no c3 subscriber for propagation")
+    end,
+    schedule_rate_propagation_c3(),
+    {noreply, State};
 
 handle_info(_Msg, State) ->
     {noreply, State}.
@@ -601,34 +614,34 @@ check_sub_exists(From, ReqRate, Id) ->
     case ets:member(find_sub, ReqRate) of
        true ->
           case lists:member(Id, ets:lookup_element(find_sub, ReqRate, 2)) of
-             true -> lager:error("LASPVIN Find_sub request id exists");
+             true -> lager:debug("LASPVIN Find_sub request id exists");
              false -> 
-                lager:error("LASPVIN Matching find_sub rates found~n"),
-                lager:error("LASPVIN find_sub:insert ReqRate:~p Id:~p From:~p ~n", [ReqRate, Id, From]),
+                lager:debug("LASPVIN Matching find_sub rates found~n"),
+                lager:debug("LASPVIN find_sub:insert ReqRate:~p Id:~p From:~p ~n", [ReqRate, Id, From]),
                 ets:insert(find_sub, [{ReqRate, Id, From}]),
                 found_sub(Id)
           end;
        false ->
           ets:insert(find_sub, {ReqRate, Id, From}),
-          lager:error("LASPVIN test2 coming here 1"),
+          lager:debug("LASPVIN test2 coming here 1"),
           case ReqRate of
              "c1" ->
-                lager:error("LASPVIN test2 coming here 2"),
+                lager:debug("LASPVIN test2 coming here 2"),
                 case ets:member(c1, "peer") of
                    true ->
-                      lager:error("LASPVIN test2 coming here 3"),
+                      lager:debug("LASPVIN test2 coming here 3"),
                       case lists:member(From, ets:lookup_element(c1, "peer", 2)) of
                          true -> 
                             case length(ets:lookup_element(c1, "peer", 2)) > 1 of
                                true -> 
-                                   lager:error("LASPVIN I found the peer ~n"),
+                                   lager:debug("LASPVIN I found the peer ~n"),
                                    found_sub(Id);
-                               false -> lager:error("LASPVIN forward request to peers"), forward_sub_req(Id)
+                               false -> lager:debug("LASPVIN forward request to peers"), forward_sub_req(Id)
                             end;
                          false ->
                              found_sub(Id)
                       end;
-                   false -> lager:error("LASPVIN send to peers"), forward_sub_req(Id)
+                   false -> lager:debug("LASPVIN send to peers"), forward_sub_req(Id)
                 end;
              "c2" ->
                 case ets:member(c2, "peer") of
@@ -638,7 +651,7 @@ check_sub_exists(From, ReqRate, Id) ->
                             case length(ets:lookup_element(c2, "peer", 2)) > 1 of
                                true -> 
                                    found_sub(Id);
-                               false -> lager:error("LASPVIN forward request to peers ~n"), forward_sub_req(Id)
+                               false -> lager:debug("LASPVIN forward request to peers ~n"), forward_sub_req(Id)
                             end;
                          false ->
                              found_sub(Id)
@@ -647,7 +660,7 @@ check_sub_exists(From, ReqRate, Id) ->
                       case ets:member(c1, "peer") of
                          true -> 
                              found_sub(Id);
-                         false -> lager:error("LASPVIN send to peers"), forward_sub_req(Id)
+                         false -> lager:debug("LASPVIN send to peers"), forward_sub_req(Id)
                       end
                 end
           end
@@ -674,6 +687,11 @@ schedule_rate_propagation_c2() ->
     %22500 milliseconds is 22.5 seconds
     timer:send_after(22500, rate_prop_c2).
 
+%% @private
+schedule_rate_propagation_c3() ->
+    lager:debug("LASPVIN rate_propagation_c3"),
+    %22500 milliseconds is 22.5 seconds
+    timer:send_after(22500, rate_prop_c3).
 
 %% @private
 propagate_by_class(Class, Sub) ->
@@ -746,7 +764,7 @@ check_subscription() ->
                    true -> ets:insert(peer_rates, [{"subscription", lists:nth(1, ets:lookup_element(c1, "peer", 2))}]), ?SYNC_BACKEND:send(?MODULE, {rate_subscribe, lasp_support:mynode(), ets:lookup_element(peer_rates, "self_rate", 2)}, lists:nth(1, ets:lookup_element(c1, "peer", 2)));
                    false ->
                       case ets:member(find_sub, ets:lookup_element(peer_rates, "self_rate", 2)) of
-                         true -> lager:error("Find_sub_req exists for the class");
+                         true -> lager:debug("Find_sub_req exists for the class");
                          false -> 
                             ets:insert(find_sub, [{"c1", erlang:atom_to_list(lasp_support:mynode())++"c1", lasp_support:mynode()}]), 
                             forward_sub_req(erlang:atom_to_list(lasp_support:mynode())++"c1")
@@ -757,7 +775,7 @@ check_subscription() ->
 
 %%private
 forward_sub_req(Id) ->
-   lager:error("LASPVIN no c1 peer to subscribe forwarding to peers ~n"),
+   lager:debug("LASPVIN no c1 peer to subscribe forwarding to peers ~n"),
    lists:foreach(fun(Peer) ->
       case lists:member(Peer, ets:lookup_element(find_sub, "c1", 3)) of
          true -> ok;
@@ -769,7 +787,7 @@ forward_sub_req(Id) ->
 
 %%private
 found_sub(Id) ->
-    lager:error("LASPVIN found the peer"),
+    lager:debug("LASPVIN found the peer"),
     case ets:member(find_sub_aq, Id) of
         true ->
             ok;
