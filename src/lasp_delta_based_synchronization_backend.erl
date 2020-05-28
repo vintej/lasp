@@ -137,12 +137,15 @@ handle_cast({delta_exchange, Peer, ObjectFilterFun},
     lasp_marathon_simulations:log_message_queue_size("delta_exchange"),
 
     lasp_logger:extended("Exchange starting for ~p", [Peer]),
+    lager:error("LASPVIN COming to delta_exch for Peer:~p ~n", [Peer]),
 
     Mutator = fun({Id, #dv{value=Value, type=Type, metadata=Metadata,
                            delta_counter=Counter, delta_map=DeltaMap,
                            delta_ack_map=AckMap0}=Object}) ->
+        lager:error("LASPVIN Inside mutator ~n"),
         case ObjectFilterFun(Id, Metadata) of
             true ->
+                lager:error("LASPVIN ObjectFilterFun True Id:~p Meta:~p ~n", [Id, Metadata]),
                 Ack = case orddict:find(Peer, AckMap0) of
                     {ok, {Ack0, _GCCounter}} ->
                         Ack0;
@@ -165,6 +168,7 @@ handle_cast({delta_exchange, Peer, ObjectFilterFun},
 
                 AckMap = case Ack < Counter orelse ClientInReactiveMode of
                     true ->
+                        lager:error("LASPVIN Ackmap True sending now ~n"),
                         ?SYNC_BACKEND:send(?MODULE, {delta_send, lasp_support:mynode(), {Id, Type, Metadata, Deltas}, Counter}, Peer),
 
                         orddict:map(
@@ -179,11 +183,13 @@ handle_cast({delta_exchange, Peer, ObjectFilterFun},
                             AckMap0
                         );
                     false ->
+                        lager:error("LASPVIN AckMap False skipping~n"),
                         AckMap0
                 end,
 
                 {Object#dv{delta_ack_map=AckMap}, Id};
             false ->
+                lager:error("LASPVIN ObjectFilterFun False Id:~p Meta:~p ~n", [Id, Metadata]),
                 {Object, skip}
         end
     end,
@@ -192,6 +198,7 @@ handle_cast({delta_exchange, Peer, ObjectFilterFun},
     {ok, _} = lasp_storage_backend:update_all(Store, Mutator),
 
     lasp_logger:extended("Exchange finished for ~p", [Peer]),
+    lager:error("Exchange finished~n"),
 
     {noreply, State};
 
@@ -207,7 +214,7 @@ handle_cast({delta_send, From, {Id, Type, _Metadata, Deltas}, Counter},
                                                ?CLOCK_INIT(Actor)})
              end),
     lasp_logger:extended("Receiving delta took: ~p microseconds.", [Time]),
-    lager:error("LASPVIN Received delta at TimeStamp: ~p ~n", [time_stamp()]),
+    lager:error("LASPVIN Received delta From:~p at TimeStamp: ~p ~n", [From, time_stamp()]),
 
     %% Acknowledge message.
     ?SYNC_BACKEND:send(?MODULE, {delta_ack, lasp_support:mynode(), Id, Counter}, From),
@@ -659,7 +666,7 @@ schedule_rate_class_info_propagation() ->
 schedule_rate_propagation_c1() ->
     lager:debug("LASPVIN rate_propagation_c1"),
     %5000 milliseconds is 5 seconds
-    timer:send_after(3000, rate_prop_c1).
+    timer:send_after(5000, rate_prop_c1).
 
 %% @private
 schedule_rate_propagation_c2() ->
