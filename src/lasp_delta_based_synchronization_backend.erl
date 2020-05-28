@@ -100,10 +100,10 @@ init([Store, Actor]) ->
     ets:new(find_sub_aq, [ordered_set, named_table, public]),
     lager:debug("LASPVIN test"),
     %schedule_delta_synchronization(),
-    schedule_rate_propagation(),
     schedule_delta_garbage_collection(),
     schedule_rate_class_info_propagation(),
-    schedule_rate_propagation(),
+    schedule_rate_propagation_c1(),
+    schedule_rate_propagation_c2(),
 
     {ok, #state{actor=Actor, gossip_peers=[], store=Store}}.
 
@@ -472,11 +472,21 @@ handle_info(rate_info, #state{store=Store}=State) ->
 handle_info(rate_prop_c1, #state{store=Store}=State) ->
     lager:debug("LASPVIN Store: ~p State:~p ~n", [Store, State]),
     case ets:member(c1, "peer") of
-        true -> propagate_by_class(c1);
+        true -> propagate_by_class(c1, "peer");
         false -> lager:error("LASPVIN no c1 peers for propagation")
     end,
-    schedule_rate_propagation(),
+    schedule_rate_propagation_c1(),
     {noreply, State};
+
+handle_info(rate_prop_c2, #state{store=Store}=State) ->
+    lager:debug("LASPVIN Store: ~p State:~p ~n", [Store, State]),
+    case ets:member(c2, "subscriber") of
+        true -> propagate_by_class(c2, "subscriber");
+        false -> lager:error("LASPVIN no c2 subscriber for propagation")
+    end,
+    schedule_rate_propagation_c2(),
+    {noreply, State};
+
 
 handle_info(_Msg, State) ->
     {noreply, State}.
@@ -646,13 +656,20 @@ schedule_rate_class_info_propagation() ->
     timer:send_after(10000, rate_info).
 
 %% @private
-schedule_rate_propagation() ->
-    lager:debug("LASPVIN test"),
+schedule_rate_propagation_c1() ->
+    lager:debug("LASPVIN rate_propagation_c1"),
     %5000 milliseconds is 5 seconds
-    timer:send_after(5000, rate_prop_c1).
+    timer:send_after(3000, rate_prop_c1).
 
 %% @private
-propagate_by_class(Class) ->
+schedule_rate_propagation_c2() ->
+    lager:debug("LASPVIN rate_propagation_c2"),
+    %22500 milliseconds is 22.5 seconds
+    timer:send_after(22500, rate_prop_c2).
+
+
+%% @private
+propagate_by_class(Class, Sub) ->
     lasp_logger:extended("Beginning delta synchronization by class."),
 
     
@@ -662,7 +679,7 @@ propagate_by_class(Class) ->
                       end,
     lists:foreach(fun(Peer) ->
                           init_delta_sync(Peer, FilterWithoutConvergenceFun) end,
-                  get_subscribers(Class)),
+                  get_subscribers(Class, Sub)),
 
     %% Synchronize convergence structure.
     FilterWithConvergenceFun = fun(Id, _) ->
@@ -670,14 +687,11 @@ propagate_by_class(Class) ->
                       end,
     lists:foreach(fun(Peer) ->
                           init_delta_sync(Peer, FilterWithConvergenceFun) end,
-                  get_subscribers(Class)),
-
-    %% Schedule next synchronization.
-    schedule_rate_propagation().
+                  get_subscribers(Class, Sub)).
 
 %% @private
-get_subscribers(Class) ->
-    ets:lookup_element(Class, "peer", 2).
+get_subscribers(Class, Sub) ->
+    ets:lookup_element(Class, Sub, 2).
 
 %% @private
 init_delta_sync(Peer, ObjectFilterFun) ->
