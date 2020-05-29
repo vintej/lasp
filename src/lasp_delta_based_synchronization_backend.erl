@@ -33,7 +33,8 @@
          handle_cast/2,
          handle_info/2,
          terminate/2,
-         get_members/1, 
+         get_members/1,
+         time_stamp/0, 
          code_change/3]).
 
 -export([propagate/1]).
@@ -594,7 +595,7 @@ peer_rate_insert(From, Rate) ->
                  end
     end.
 
-%% @private
+
 time_stamp() ->
     {{Year, Month, Day}, {Hour, Minute, Second}} = calendar:now_to_datetime(erlang:now()),
     lists:flatten(io_lib:format("~4..0w-~2..0w-~2..0wT~2..0w:~2..0w:~2..0w",[Year,Month,Day,Hour,Minute,Second])).
