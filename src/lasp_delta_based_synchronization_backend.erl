@@ -33,6 +33,7 @@
          handle_cast/2,
          handle_info/2,
          terminate/2,
+         time_stamp/0,
          code_change/3]).
 
 -export([propagate/1]).
@@ -79,6 +80,7 @@ init([Store, Actor]) ->
 
     schedule_delta_synchronization(),
     schedule_delta_garbage_collection(),
+    lager:error("LASPVIN check timestamp: ~p ~n", [time_stamp()]),
 
     {ok, #state{actor=Actor, gossip_peers=[], store=Store}}.
 
@@ -350,7 +352,7 @@ schedule_delta_synchronization() ->
             ok
     end.
 
-%% @private
+
 time_stamp() ->
     {{Year, Month, Day}, {Hour, Minute, Second}} = calendar:now_to_datetime(erlang:now()),
     lists:flatten(io_lib:format("~4..0w-~2..0w-~2..0wT~2..0w:~2..0w:~2..0w",[Year,Month,Day,Hour,Minute,Second])).
