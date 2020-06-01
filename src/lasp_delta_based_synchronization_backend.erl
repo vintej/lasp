@@ -764,7 +764,7 @@ check_sub_exists(From, ReqRate, Id) ->
                 lager:debug("LASPVIN Matching find_sub rates found~n"),
                 lager:debug("LASPVIN find_sub:insert ReqRate:~p Id:~p From:~p ~n", [ReqRate, Id, From]),
                 ets:insert(find_sub, [{ReqRate, Id, From}]),
-                found_sub(Id, string:sub_string(lists:nth(1,ets:lookup_element(find_sub, ReqRate, 2)), 1, string:len(lists:nth(1, ets:lookup_element(find_sub, ReqRate, 2)))-2))
+                found_sub(Id, erlang:list_to_atom(string:sub_string(lists:nth(1,ets:lookup_element(find_sub, ReqRate, 2)), 1, string:len(lists:nth(1, ets:lookup_element(find_sub, ReqRate, 2)))-2)))
           end;
        false ->
           ets:insert(find_sub, {ReqRate, Id, From}),
