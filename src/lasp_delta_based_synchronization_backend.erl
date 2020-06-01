@@ -64,8 +64,8 @@ extract_log_type_and_payload({rate_subscribe, Node, Rate}) ->
     [{delta_send_protocol, {Node, Rate}}];
 extract_log_type_and_payload({find_sub, Node, Rate, Id}) ->
     [{delta_send_protocol, {Node, Rate, Id}}];
-extract_log_type_and_payload({find_sub_aq, Id, Node, Node}) ->
-    [{delta_send_protocol, {Id, Node, Node}}];
+extract_log_type_and_payload({find_sub_aq, Id, ToNode, Node}) ->
+    [{delta_send_protocol, {Id, ToNode, Node}}];
 extract_log_type_and_payload({find_sub_aq_lock, Id, Node}) ->
     [{delta_send_protocol, {Id, Node}}].
 
@@ -258,7 +258,7 @@ handle_cast({find_sub_aq, Id, ToNode, From}, #state{store=Store}=State) ->
                                 true -> lager:debug("LASPVIN Path already exists");
                                 false ->
                                     lager:error("LASPVIN Got path to ~p ~n", [ToNode]),
-                                    ets:insert(find_sub_aq, [{Id, ToNode}]),
+                                    ets:insert(find_sub_aq, [{Id, ToNode, From}]),
                                     ?SYNC_BACKEND:send(?MODULE, {find_sub_aq_lock, Id, lasp_support:mynode()}, From)
                             end
                     end;
