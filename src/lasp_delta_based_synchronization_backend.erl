@@ -257,7 +257,7 @@ handle_cast({find_sub_aq, Id, ToNode, From}, #state{store=Store}=State) ->
                             case ets:member(find_sub_aq, Id) of
                                 true -> lager:debug("LASPVIN Path already exists");
                                 false ->
-                                    lager:error("LASPVIN Got path to ~p ~n", [ToNode]),
+                                    lager:error("LASPVIN Got path to ~p ID:~p ~n", [ToNode, Id]),
                                     ets:insert(find_sub_aq, [{Id, ToNode, From}]),
                                     ?SYNC_BACKEND:send(?MODULE, {find_sub_aq_lock, Id, lasp_support:mynode()}, From)
                             end
