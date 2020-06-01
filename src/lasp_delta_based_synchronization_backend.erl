@@ -352,8 +352,9 @@ schedule_delta_synchronization() ->
 
 %% @private
 time_stamp() ->
+    {_, _, Micro} = erlang:timestamp(),
     {{Year, Month, Day}, {Hour, Minute, Second}} = calendar:now_to_datetime(erlang:now()),
-    lists:flatten(io_lib:format("~4..0w-~2..0w-~2..0wT~2..0w:~2..0w:~2..0w",[Year,Month,Day,Hour,Minute,Second])).
+    lists:flatten(io_lib:format("~4..0w-~2..0w-~2..0wT~2..0w:~2..0w:~2..0w.~3..0s",[Year,Month,Day,Hour,Minute,Second, integer_to_list(Micro)])).
 
 %% @private
 schedule_delta_garbage_collection() ->
