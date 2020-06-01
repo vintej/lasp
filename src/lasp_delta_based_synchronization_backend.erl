@@ -64,8 +64,8 @@ extract_log_type_and_payload({rate_subscribe, Node, Rate}) ->
     [{delta_send_protocol, {Node, Rate}}];
 extract_log_type_and_payload({find_sub, Node, Rate, Id}) ->
     [{delta_send_protocol, {Node, Rate, Id}}];
-extract_log_type_and_payload({find_sub_aq, Id, Node}) ->
-    [{delta_send_protocol, {Id, Node}}];
+extract_log_type_and_payload({find_sub_aq, Id, Node, Node}) ->
+    [{delta_send_protocol, {Id, Node, Node}}];
 extract_log_type_and_payload({find_sub_aq_lock, Id, Node}) ->
     [{delta_send_protocol, {Id, Node}}].
 
@@ -764,7 +764,7 @@ check_sub_exists(From, ReqRate, Id) ->
                 lager:debug("LASPVIN Matching find_sub rates found~n"),
                 lager:debug("LASPVIN find_sub:insert ReqRate:~p Id:~p From:~p ~n", [ReqRate, Id, From]),
                 ets:insert(find_sub, [{ReqRate, Id, From}]),
-                found_sub(Id, string:slice(lists:nth(1,ets:lookup_element(find_sub, ReqRate, 2)), 0, string:len(lists:nth(1, ets:lookup_element(find_sub, Id, 2)))-2))
+                found_sub(Id, string:slice(lists:nth(1,ets:lookup_element(find_sub, ReqRate, 2)), 0, string:len(lists:nth(1, ets:lookup_element(find_sub, ReqRate, 2)))-2))
           end;
        false ->
           ets:insert(find_sub, {ReqRate, Id, From}),
