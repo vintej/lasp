@@ -33,6 +33,7 @@
          handle_cast/2,
          handle_info/2,
          terminate/2,
+         time_stamp/0,
          code_change/3]).
 
 -export([propagate/1]).
@@ -79,6 +80,7 @@ init([Store, Actor]) ->
 
     schedule_delta_synchronization(),
     schedule_delta_garbage_collection(),
+    lager:error("LASPVIN check timestamp: ~p ~n", [time_stamp()]),
 
     {ok, #state{actor=Actor, gossip_peers=[], store=Store}}.
 
@@ -182,7 +184,7 @@ handle_cast({delta_send, From, {Id, Type, _Metadata, Deltas}, Counter},
                                                ?CLOCK_INIT(Actor)})
              end),
     lasp_logger:extended("Receiving delta took: ~p microseconds.", [Time]),
-    lager:error("LASPVIN Recevied delta From=~p at TimeStamp= ~p microseconds=~p ~n", [From, time_stamp(), Time]),
+    lager:error("LASPVIN Received delta From=~p at TimeStamp= ~p microseconds=~p ~n", [From, time_stamp(), Time]),
 
     %% Acknowledge message.
     ?SYNC_BACKEND:send(?MODULE, {delta_ack, lasp_support:mynode(), Id, Counter}, From),
@@ -350,7 +352,7 @@ schedule_delta_synchronization() ->
             ok
     end.
 
-%% @private
+
 time_stamp() ->
     {_, _, Micro} = erlang:timestamp(),
     {{Year, Month, Day}, {Hour, Minute, Second}} = calendar:now_to_datetime(erlang:now()),
