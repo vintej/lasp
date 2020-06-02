@@ -247,25 +247,15 @@ handle_cast({find_sub_aq, Id, ToNode, From}, #state{store=Store}=State) ->
     lager:debug("LASPVIN received find_sub_aq for Id:~p From:~p ~n", [Id, From]),
     case ets:member(find_sub_aq, Id) of
         true ->
-            ok;
-        false ->
-            case lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1'}))) == lasp_support:mynode() of
-                true ->
-                    case ets:member(peer_rates, ToNode) of
-                        true -> ok;
-                        false ->
-                            case ets:member(find_sub_aq, Id) of
-                                true -> lager:debug("LASPVIN Path already exists");
-                                false ->
-                                    lager:error("LASPVIN Got path to ~p ID:~p ~n", [ToNode, Id]),
-                                    ets:insert(find_sub_aq, [{Id, ToNode, From}]),
-                                    ?SYNC_BACKEND:send(?MODULE, {find_sub_aq_lock, Id, lasp_support:mynode()}, From)
-                            end
-                    end;
+            case ets:member(peer_rates, ToNode) of
+                true -> lager:error("LASPVIN ToNode ~p is a Peer.. Skipping ~n", [ToNode]), ok;
                 false -> 
-                    ets:insert(find_sub_aq, [{Id, ToNode, From}]),
-                    ?SYNC_BACKEND:send(?MODULE, {find_sub_aq, Id, ToNode, lasp_support:mynode()}, lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1'}))))
-            end
+                    case lists:nth(1, lists:nth(1, ets:match(find_sub_aq, {Id, '$1', '_'}))) == ToNode of
+                        true -> lager:error("LASPVIN path ToNode: ~p exists ~n",[ToNode]);
+                        false -> found_sub_aq_lockpath(Id, ToNode, From)
+                    end
+            end;
+        false -> found_sub_aq_lockpath(Id, ToNode, From)
     end,
     {noreply, State};
 
@@ -275,8 +265,8 @@ handle_cast({find_sub_aq_lock, Id, From}, #state{store=Store}=State) ->
     lager:debug("LASPVIN received find_sub_aq_lock for Id:~p From:~p ~n", [Id, From]),
     case ets:lookup_element(peer_rates, "self_rate", 2)==lists:nth(1,lists:nth(1,ets:match(find_sub, {'$1',Id, '_' }))) of
         true ->
-            lager:debug("LASPVIN Rate updated already ~n"),
-            ok;
+            lager:error("LASPVIN Rate updated already ~n"),
+            forward_aq_lock(Id);
         false ->
             lager:debug("LASPVIN updating rate ~n"),
             ets:update_element(peer_rates, "self_rate", {2, lists:nth(1, lists:nth(1,ets:match(find_sub, {'$1', Id, '_'})))}),
@@ -284,16 +274,7 @@ handle_cast({find_sub_aq_lock, Id, From}, #state{store=Store}=State) ->
             %ets:insert(peer_rates, [{"subscription", lists:nth(1, ets:lookup_element(c1, "peer", 2))}]),
             %?SYNC_BACKEND:send(?MODULE, {rate_subscribe, lasp_support:mynode(), ets:lookup_element(peer_rates, "self_rate", 2)}, lists:nth(1, ets:lookup_element(c1, "peer", 2)))
             %propagate update_rate for all? may be at the end of the function,
-            case ets:lookup_element(find_sub_aq, Id, 2) == lasp_support:mynode() of
-                true ->
-                    %check find_sub if there are any other nodes requiring same rate,
-                    %if there are inform them 
-                    lager:error("LASPVIN Locking reached chain end");
-                false ->
-                    %pass on the lock & delete find_sub_aq entry
-                    ?SYNC_BACKEND:send(?MODULE, {find_sub_aq_lock, Id, lasp_support:mynode()},ets:lookup_element(find_sub_aq, Id, 2))
-                    %ets:delete(find_sub_aq, Id)
-            end,
+            forward_aq_lock(Id),
             ets:delete_all_objects(rate_ack)
     end,
     ets:delete_object(find_sub, lists:nth(1,ets:match_object(find_sub, {'_', Id, '_'}))),
@@ -302,8 +283,13 @@ handle_cast({find_sub_aq_lock, Id, From}, #state{store=Store}=State) ->
 handle_cast({find_sub, From, ReqRate, Id}, #state{store=Store}=State) ->
     lasp_marathon_simulations:log_message_queue_size("find_sub"),
     lager:debug("LASPVIN store:~p ~n", [Store]),
-    lager:debug("LASPVIN received find_sub Id: ~p From: ~p ~n", [Id, From]),
-    check_sub_exists(From, ReqRate, Id),
+    lager:error("LASPVIN received find_sub Id: ~p From: ~p ~n", [Id, From]),
+    case ets:member(find_sub_aq, Id) of
+        true ->
+            ok;
+        false ->
+            check_sub_exists(From, ReqRate, Id)
+    end,
     {noreply, State};
 
 handle_cast({rate_ack, From, Rate}, #state{store=Store}=State) ->
@@ -826,6 +812,33 @@ found_sub(Id, ToNode) ->
         false ->
             ets:insert(find_sub_aq, [{Id, ToNode, lasp_support:mynode()}]),
             ?SYNC_BACKEND:send(?MODULE, {find_sub_aq, Id, ToNode, lasp_support:mynode()}, lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1'}))))
+    end,
+    forward_sub_req(Id).
+
+
+%%private
+found_sub_aq_lockpath(Id, ToNode, From) ->
+    case lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1'}))) == lasp_support:mynode() of
+                true ->
+                    lager:error("LASPVIN Got path to ~p ID:~p ~n", [ToNode, Id]),
+                    ets:insert(find_sub_aq, [{Id, ToNode, From}]),
+                    ?SYNC_BACKEND:send(?MODULE, {find_sub_aq_lock, Id, lasp_support:mynode()}, From);
+                false -> 
+                    ets:insert(find_sub_aq, [{Id, ToNode, From}]),
+                    ?SYNC_BACKEND:send(?MODULE, {find_sub_aq, Id, ToNode, lasp_support:mynode()}, lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1'}))))
+    end.
+
+%%private
+forward_aq_lock(Id) ->
+    case ets:lookup_element(find_sub_aq, Id, 2) == lasp_support:mynode() of
+                true ->
+                    %check find_sub if there are any other nodes requiring same rate,
+                    %if there are inform them 
+                    lager:error("LASPVIN Locking reached chain end");
+                false ->
+                    %pass on the lock & delete find_sub_aq entry
+                    ?SYNC_BACKEND:send(?MODULE, {find_sub_aq_lock, Id, lasp_support:mynode()},ets:lookup_element(find_sub_aq, Id, 2))
+                    %ets:delete(find_sub_aq, Id)
     end.
 
 %% @private
