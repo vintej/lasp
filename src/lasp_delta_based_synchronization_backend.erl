@@ -291,10 +291,10 @@ handle_cast({find_sub, From, ReqRate, Id}, #state{store=Store}=State) ->
             check_sub_exists(From, ReqRate, Id),
             case ets:member(find_sub_aq, Id) of
                 true ->
-                    case ReqRate of ->
+                    case ReqRate of
                         "c1" -> forward_sub_req(Id);
                         "c2" -> lager:error("LASPVIN Skip forwarding for class c2")
-                    end
+                    end;
                 false -> lager:error("LASPVIN Request forwarded already~n")
             end
     end,
