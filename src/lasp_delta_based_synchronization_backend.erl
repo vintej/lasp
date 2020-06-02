@@ -98,7 +98,7 @@ init([Store, Actor]) ->
     ets:new(c2, [named_table, bag, public]),
     ets:new(c3, [named_table, bag, public]),
     ets:new(find_sub, [named_table, bag, public]),
-    ets:new(find_sub_aq, [ordered_set, named_table, public]),
+    ets:new(find_sub_aq, [ named_table, bag, public]),
     lager:debug("LASPVIN test"),
     %schedule_delta_synchronization(),
     schedule_delta_garbage_collection(),
@@ -295,7 +295,7 @@ handle_cast({find_sub, From, ReqRate, Id}, #state{store=Store}=State) ->
                         "c1" -> forward_sub_req(Id);
                         "c2" -> lager:error("LASPVIN Skip forwarding for class c2")
                     end;
-                false -> lager:error("LASPVIN Request forwarded already~n")
+                false -> lager:error("LASPVIN Request forwarded~n")
             end
     end,
     {noreply, State};
@@ -823,7 +823,7 @@ found_sub(Id, ToNode) ->
     case erlang:list_to_atom(string:substr(Id, 1, string:len(Id)-2)) == ToNode of
         true -> lager:error("LASPVIN False call");
         false ->
-            lager:error("LASPVIN found the peer at ~p ~n", [time_stamp()]),
+            lager:error("LASPVIN found the peer at ~p for ID: ~p ToNode: ~p ~n", [time_stamp(), Id, ToNode]),
             case ets:member(find_sub_aq, Id) of
                 true -> ok;
                 false ->
