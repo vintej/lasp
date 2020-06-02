@@ -290,6 +290,7 @@ handle_cast({find_sub, From, ReqRate, Id}, #state{store=Store}=State) ->
         false ->
             check_sub_exists(From, ReqRate, Id)
     end,
+    forward_sub_req(Id),
     {noreply, State};
 
 handle_cast({rate_ack, From, Rate}, #state{store=Store}=State) ->
@@ -734,8 +735,11 @@ forward_sub_req(Id) ->
    lists:foreach(fun(Peer) ->
       case lists:member(Peer, ets:lookup_element(find_sub, "c1", 3)) of
          true -> ok;
-         false -> 
-            ?SYNC_BACKEND:send(?MODULE, {find_sub, lasp_support:mynode(),"c1", Id}, Peer)
+         false ->
+             case erlang:list_to_atom(string:substr(Id, 1, string:len(Id)-2)) == Peer of
+               true -> lager:error("LASPVIN Peer ~p is Source of Req.. Skipping ~n",[Peer]);
+               false -> ?SYNC_BACKEND:send(?MODULE, {find_sub, lasp_support:mynode(),"c1", Id}, Peer)
+            end
       end
    end,
    get_peers()).
@@ -812,8 +816,7 @@ found_sub(Id, ToNode) ->
         false ->
             ets:insert(find_sub_aq, [{Id, ToNode, lasp_support:mynode()}]),
             ?SYNC_BACKEND:send(?MODULE, {find_sub_aq, Id, ToNode, lasp_support:mynode()}, lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1'}))))
-    end,
-    forward_sub_req(Id).
+    end.
 
 
 %%private
