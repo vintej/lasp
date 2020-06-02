@@ -277,7 +277,7 @@ handle_cast({find_sub_aq_lock, Id, From}, #state{store=Store}=State) ->
             forward_aq_lock(Id),
             ets:delete_all_objects(rate_ack)
     end,
-    ets:delete_object(find_sub, lists:nth(1,ets:match_object(find_sub, {'_', Id, '_'}))),
+    %ets:delete_object(find_sub, lists:nth(1,ets:match_object(find_sub, {'_', Id, '_'}))),
     {noreply, State};
 
 handle_cast({find_sub, From, ReqRate, Id}, #state{store=Store}=State) ->
