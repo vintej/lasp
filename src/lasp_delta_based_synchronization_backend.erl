@@ -820,14 +820,17 @@ forward_find_sub_on_join(From) ->
 
 %%private
 found_sub(Id, ToNode) ->
-    lager:error("LASPVIN found the peer"),
-    case ets:member(find_sub_aq, Id) of
-        true ->
-            ok;
+    case erlang:list_to_atom(string:substr(Id, 1, string:len(Id)-2)) == ToNode of
+        true -> lager:error("LASPVIN False call");
         false ->
-            ets:insert(find_sub_aq, [{Id, ToNode, lasp_support:mynode()}]),
-            timer:sleep(5),
-            ?SYNC_BACKEND:send(?MODULE, {find_sub_aq, Id, ToNode, lasp_support:mynode()}, lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1'}))))
+            lager:error("LASPVIN found the peer at ~p ~n", [time_stamp()]),
+            case ets:member(find_sub_aq, Id) of
+                true -> ok;
+                false ->
+                    ets:insert(find_sub_aq, [{Id, ToNode, lasp_support:mynode()}]),
+                    %timer:sleep(5),
+                    ?SYNC_BACKEND:send(?MODULE, {find_sub_aq, Id, ToNode, lasp_support:mynode()}, lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1'}))))
+            end
     end.
 
 
