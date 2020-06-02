@@ -341,13 +341,7 @@ handle_cast({rate_class, From, Rate}, #state{store=Store}=State) ->
                     end,
                 ets:lookup_element(find_sub, Rate, 2));
               false ->
-                  lists:foreach(fun(ReqRate) ->
-                          case From == lists:nth(1,ets:lookup_element(find_sub, lists:nth(1,ReqRate), 3)) of
-                             true -> ok;
-                             false ->lager:debug("LASPVIN sent find_sub req ~n"), ?SYNC_BACKEND:send(?MODULE, {find_sub, lasp_support:mynode(), lists:nth(1,ReqRate), lists:nth(1,ets:lookup_element(find_sub, lists:nth(1,ReqRate), 2))}, From)
-                          end
-                        end,
-                  lists:usort(ets:match(find_sub, {'$1', '_', '_'})))
+                  forward_find_sub_on_join(From)
             end
     end,
     {noreply, State};
@@ -815,13 +809,24 @@ check_sub_exists(From, ReqRate, Id) ->
     end.
 
 %%private
+forward_find_sub_on_join(From) ->
+    lists:foreach(fun(ReqRate) ->
+                          case From == lists:nth(1,ets:lookup_element(find_sub, lists:nth(1,ReqRate), 3)) of
+                             true -> ok;
+                             false ->lager:debug("LASPVIN sent find_sub req ~n"), ?SYNC_BACKEND:send(?MODULE, {find_sub, lasp_support:mynode(), lists:nth(1,ReqRate), lists:nth(1,ets:lookup_element(find_sub, lists:nth(1,ReqRate), 2))}, From)
+                          end
+                        end,
+                  lists:usort(ets:match(find_sub, {'$1', '_', '_'}))).
+
+%%private
 found_sub(Id, ToNode) ->
-    lager:debug("LASPVIN found the peer"),
+    lager:error("LASPVIN found the peer"),
     case ets:member(find_sub_aq, Id) of
         true ->
             ok;
         false ->
             ets:insert(find_sub_aq, [{Id, ToNode, lasp_support:mynode()}]),
+            timer:sleep(5),
             ?SYNC_BACKEND:send(?MODULE, {find_sub_aq, Id, ToNode, lasp_support:mynode()}, lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1'}))))
     end.
 
