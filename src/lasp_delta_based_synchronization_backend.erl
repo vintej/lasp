@@ -259,7 +259,15 @@ handle_cast({find_sub_aq, Id, ToNode, From}, #state{store=Store}=State) ->
                         false -> found_sub_aq_lockpath(Id, ToNode, From)
                     end
             end;
-        false -> found_sub_aq_lockpath(Id, ToNode, From)
+        false ->
+            case ets:member(c1, "pseudopeer") of
+                        true -> 
+                            case lists:member(ToNode, ets:lookup_element(c1, "pseudopeer", 2)) of
+                                true -> lager:error("LASPVIN Id doesnt exist but path ToNode: ~p exists ~n",[ToNode]);
+                                false -> found_sub_aq_lockpath(Id, ToNode, From)
+                            end;
+                        false -> found_sub_aq_lockpath(Id, ToNode, From)
+            end
     end,
     {noreply, State};
 
