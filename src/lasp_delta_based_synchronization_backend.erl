@@ -298,7 +298,10 @@ handle_cast({find_sub, From, ReqRate, Id}, #state{store=Store}=State) ->
         true ->
             ok;
         false ->
-            check_sub_exists(From, ReqRate, Id),
+            case ets:lookup_element(peer_rates, "self_rate", 2) == ReqRate of
+                true -> ets:insert(find_sub, {ReqRate, Id, From}), found_sub(Id, lasp_support:mynode());
+                false -> check_sub_exists(From, ReqRate, Id)
+            end,
             case ets:member(find_sub_aq, Id) of
                 true ->
                     case ReqRate of
