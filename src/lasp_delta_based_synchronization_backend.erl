@@ -339,20 +339,7 @@ handle_cast({rate_class, From, Rate}, #state{store=Store}=State) ->
                   lists:foreach(fun(Id) ->
                       found_sub(Id, From)
                     end,
-                ets:lookup_element(find_sub, Rate, 2)),
-                lists:foreach(fun(ReqRate) ->
-                          case From == lists:nth(1,ets:lookup_element(find_sub, lists:nth(1,ReqRate), 3)) of
-                             true -> ok;
-                             false ->
-                                 case ReqRate of
-                                    "c1" ->
-                                        lager:debug("LASPVIN sent find_sub req for c1 ~n"), 
-                                        ?SYNC_BACKEND:send(?MODULE, {find_sub, lasp_support:mynode(), lists:nth(1,ReqRate), lists:nth(1,ets:lookup_element(find_sub, lists:nth(1,ReqRate), 2))}, From);
-                                    "c2" -> ok
-                                end
-                          end
-                        end,
-                  lists:usort(ets:match(find_sub, {'$1', '_', '_'})));
+                ets:lookup_element(find_sub, Rate, 2));
               false ->
                   lists:foreach(fun(ReqRate) ->
                           case From == lists:nth(1,ets:lookup_element(find_sub, lists:nth(1,ReqRate), 3)) of
