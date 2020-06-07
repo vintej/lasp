@@ -171,6 +171,7 @@ handle_cast({delta_exchange, Peer, ObjectFilterFun},
                 AckMap = case Ack < Counter orelse ClientInReactiveMode of
                     true ->
                         lager:debug("LASPVIN Ackmap True sending now ~n"),
+                        lager:error("LASPVIN Sending delta to ~p ~n", [Peer]),
                         ?SYNC_BACKEND:send(?MODULE, {delta_send, lasp_support:mynode(), {Id, Type, Metadata, Deltas}, Counter}, Peer),
 
                         orddict:map(
@@ -248,17 +249,17 @@ handle_cast({find_sub_aq, Id, ToNode, From}, #state{store=Store}=State) ->
     case ets:member(find_sub_aq, Id) of
         true ->
             case ets:member(peer_rates, ToNode) of
-                true -> lager:error("LASPVIN ToNode ~p is a Peer.. Skipping ~n", [ToNode]), ok;
+                true -> lager:debug("LASPVIN ToNode ~p is a Peer.. Skipping ~n", [ToNode]), ok;
                 false ->
                     case lists:member([ToNode], ets:match(find_sub_aq, {'_', '$1', '_'})) of
-                        true -> lager:error("LASPVIN path ToNode: ~p exists ~n",[ToNode]);
+                        true -> lager:debug("LASPVIN path ToNode: ~p exists ~n",[ToNode]);
                         false -> found_sub_aq_lockpath(Id, ToNode, From)
                     end
                     %case ets:member(c1, "pseudopeer") of
                     %    true -> 
                     %        %case lists:member(ToNode, ets:lookup_element(c1, "pseudopeer", 2)) of
                     %        case lists:member([ToNode], ets:match(find_sub_aq, {'_', '$1', '_'})) of
-                    %            true -> lager:error("LASPVIN path ToNode: ~p exists ~n",[ToNode]);
+                    %            true -> lager:debug("LASPVIN path ToNode: ~p exists ~n",[ToNode]);
                     %            false -> found_sub_aq_lockpath(Id, ToNode, From)
                     %        end;
                     %    false -> found_sub_aq_lockpath(Id, ToNode, From)
@@ -275,7 +276,7 @@ handle_cast({find_sub_aq_lock, Id, From}, #state{store=Store}=State) ->
     lager:debug("LASPVIN received find_sub_aq_lock for Id:~p From:~p ~n", [Id, From]),
     case ets:lookup_element(peer_rates, "self_rate", 2)==lists:nth(1,lists:nth(1,ets:match(find_sub, {'$1',Id, '_' }))) of
         true ->
-            lager:error("LASPVIN Rate updated already ~n"),
+            lager:debug("LASPVIN Rate updated already ~n"),
             forward_aq_lock(Id);
         false ->
             lager:debug("LASPVIN updating rate ~n"),
@@ -293,7 +294,7 @@ handle_cast({find_sub_aq_lock, Id, From}, #state{store=Store}=State) ->
 handle_cast({find_sub, From, ReqRate, Id}, #state{store=Store}=State) ->
     lasp_marathon_simulations:log_message_queue_size("find_sub"),
     lager:debug("LASPVIN store:~p ~n", [Store]),
-    lager:error("LASPVIN received find_sub Id: ~p From: ~p ~n", [Id, From]),
+    lager:debug("LASPVIN received find_sub Id: ~p From: ~p ~n", [Id, From]),
     case ets:member(find_sub_aq, Id) of
         true ->
             ok;
@@ -306,9 +307,9 @@ handle_cast({find_sub, From, ReqRate, Id}, #state{store=Store}=State) ->
                 true ->
                     case ReqRate of
                         "c1" -> forward_sub_req(Id);
-                        "c2" -> lager:error("LASPVIN Skip forwarding for class c2")
+                        "c2" -> lager:debug("LASPVIN Skip forwarding for class c2")
                     end;
-                false -> lager:error("LASPVIN Request forwarded~n")
+                false -> lager:debug("LASPVIN Request forwarded~n")
             end
     end,
     {noreply, State};
@@ -648,20 +649,23 @@ schedule_rate_class_info_propagation() ->
 %% @private
 schedule_rate_propagation_c1() ->
     lager:debug("LASPVIN rate_propagation_c1"),
+    lager:error("C1 propagation ~p ~n", [time_stamp()]),
     %5000 milliseconds is 5 seconds
-    timer:send_after(5000, rate_prop_c1).
+    timer:send_after(os:getenv("RATE_C1", 5000), rate_prop_c1).
 
 %% @private
 schedule_rate_propagation_c2() ->
     lager:debug("LASPVIN rate_propagation_c2"),
+    lager:error("C2 propagation ~p ~n", [time_stamp()]),
     %22500 milliseconds is 22.5 seconds
-    timer:send_after(22500, rate_prop_c2).
+    timer:send_after(os:getenv("RATE_C2", 22500), rate_prop_c2).
 
 %% @private
 schedule_rate_propagation_c3() ->
     lager:debug("LASPVIN rate_propagation_c3"),
+    lager:error("C3 propagation ~p ~n", [time_stamp()]),
     %22500 milliseconds is 22.5 seconds
-    timer:send_after(22500, rate_prop_c3).
+    timer:send_after(os:getenv("RATE_C3", 45500), rate_prop_c3).
 
 %% @private
 propagate_by_class(Class, Sub) ->
@@ -751,7 +755,7 @@ forward_sub_req(Id) ->
          true -> ok;
          false ->
              case erlang:list_to_atom(string:substr(Id, 1, string:len(Id)-2)) == Peer of
-               true -> lager:error("LASPVIN Peer ~p is Source of Req.. Skipping ~n",[Peer]);
+               true -> lager:debug("LASPVIN Peer ~p is Source of Req.. Skipping ~n",[Peer]);
                false -> ?SYNC_BACKEND:send(?MODULE, {find_sub, lasp_support:mynode(),"c1", Id}, Peer)
             end
       end
@@ -834,9 +838,9 @@ forward_find_sub_on_join(From) ->
 %%private
 found_sub(Id, ToNode) ->
     case erlang:list_to_atom(string:substr(Id, 1, string:len(Id)-2)) == ToNode of
-        true -> lager:error("LASPVIN False call");
+        true -> lager:debug("LASPVIN False call");
         false ->
-            lager:error("LASPVIN found the peer at ~p for ID: ~p ToNode: ~p ~n", [time_stamp(), Id, ToNode]),
+            lager:debug("LASPVIN found the peer at ~p for ID: ~p ToNode: ~p ~n", [time_stamp(), Id, ToNode]),
             case ets:member(find_sub_aq, Id) of
                 true -> ok;
                 false ->
@@ -851,7 +855,7 @@ found_sub(Id, ToNode) ->
 found_sub_aq_lockpath(Id, ToNode, From) ->
     case lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1'}))) == lasp_support:mynode() of
                 true ->
-                    lager:error("LASPVIN Got path to ~p ID:~p ~n", [ToNode, Id]),
+                    lager:debug("LASPVIN Got path to ~p ID:~p ~n", [ToNode, Id]),
                     ets:insert(find_sub_aq, [{Id, ToNode, From}]),
                     ets:insert(c1, [{"pseudopeer", ToNode}]),
                     ?SYNC_BACKEND:send(?MODULE, {find_sub_aq_lock, Id, lasp_support:mynode()}, From);
@@ -866,7 +870,7 @@ forward_aq_lock(Id) ->
                 true ->
                     %check find_sub if there are any other nodes requiring same rate,
                     %if there are inform them 
-                    lager:error("LASPVIN Locking reached chain end");
+                    lager:debug("LASPVIN Locking reached chain end");
                 false ->
                     %pass on the lock & delete find_sub_aq entry
                     ?SYNC_BACKEND:send(?MODULE, {find_sub_aq_lock, Id, lasp_support:mynode()},ets:lookup_element(find_sub_aq, Id, 2))
