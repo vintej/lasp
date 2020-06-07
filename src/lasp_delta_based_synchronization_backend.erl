@@ -721,7 +721,7 @@ check_subscription() ->
                       case ets:member(c1, "peer") of
                          true -> ets:insert(peer_rates, [{"subscription", lists:nth(1, ets:lookup_element(c1, "peer", 2))}]), ?SYNC_BACKEND:send(?MODULE, {rate_subscribe, lasp_support:mynode(), ets:lookup_element(peer_rates, "self_rate", 2)}, lists:nth(1, ets:lookup_element(c1, "peer", 2)));
                          false -> 
-                            io:fwrite("LASPVIN no peer to subscribe Case 1 ~n ")
+                            lager:debug("LASPVIN no peer to subscribe Case 1 ~n ")
                       end;
                    false ->
                       case ets:member(c2, "peer") of
@@ -729,7 +729,7 @@ check_subscription() ->
                          false ->
                             case ets:member(c1, "peer") of
                                true -> ets:insert(peer_rates, [{"subscription", lists:nth(1, ets:lookup_element(c1, "peer", 2))}]), ?SYNC_BACKEND:send(?MODULE, {rate_subscribe, lasp_support:mynode(), ets:lookup_element(peer_rates, "self_rate", 2)}, lists:nth(1, ets:lookup_element(c1, "peer", 2)));
-                               false -> io:fwrite("LASPVIN no peer to subscribe case 2 ~n")
+                               false -> lager:debug("LASPVIN no peer to subscribe case 2 ~n")
                             end
                       end
                 end;
