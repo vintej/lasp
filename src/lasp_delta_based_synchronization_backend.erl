@@ -740,7 +740,8 @@ check_subscription() ->
                       case ets:member(find_sub, ets:lookup_element(peer_rates, "self_rate", 2)) of
                          true -> lager:debug("Find_sub_req exists for the class");
                          false -> 
-                            ets:insert(find_sub, [{"c1", erlang:atom_to_list(lasp_support:mynode())++"c1", lasp_support:mynode()}]), 
+                            ets:insert(find_sub, [{"c1", erlang:atom_to_list(lasp_support:mynode())++"c1", lasp_support:mynode()}]),
+                            lager:error("Requesting c1 sub ~n"),
                             forward_sub_req(erlang:atom_to_list(lasp_support:mynode())++"c1")
                       end
                 end
@@ -855,7 +856,7 @@ found_sub(Id, ToNode) ->
 found_sub_aq_lockpath(Id, ToNode, From) ->
     case lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1'}))) == lasp_support:mynode() of
                 true ->
-                    lager:debug("LASPVIN Got path to ~p ID:~p ~n", [ToNode, Id]),
+                    lager:error("LASPVIN Got path to ~p ID:~p ~n", [ToNode, Id]),
                     ets:insert(find_sub_aq, [{Id, ToNode, From}]),
                     ets:insert(c1, [{"pseudopeer", ToNode}]),
                     ?SYNC_BACKEND:send(?MODULE, {find_sub_aq_lock, Id, lasp_support:mynode()}, From);
