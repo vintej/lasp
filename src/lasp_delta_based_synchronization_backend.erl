@@ -273,13 +273,13 @@ handle_cast({find_sub_aq, Id, ToNode, From}, #state{store=Store}=State) ->
 handle_cast({find_sub_aq_lock, Id, From}, #state{store=Store}=State) ->
     lasp_marathon_simulations:log_message_queue_size("find_sub_aq_lock"),
     lager:debug("LASPVIN Store ~p ~n",[Store]),
-    lager:debug("LASPVIN received find_sub_aq_lock for Id:~p From:~p ~n", [Id, From]),
+    lager:error("LASPVIN received find_sub_aq_lock for Id:~p From:~p ~n", [Id, From]),
     case ets:lookup_element(peer_rates, "self_rate", 2)==lists:nth(1,lists:nth(1,ets:match(find_sub, {'$1',Id, '_' }))) of
         true ->
-            lager:debug("LASPVIN Rate updated already ~n"),
+            lager:error("LASPVIN Rate updated already ~n"),
             forward_aq_lock(Id);
         false ->
-            lager:debug("LASPVIN updating rate ~n"),
+            lager:error("LASPVIN updating rate ~n"),
             ets:update_element(peer_rates, "self_rate", {2, lists:nth(1, lists:nth(1,ets:match(find_sub, {'$1', Id, '_'})))}),
             %Update scubscription if not already subscribed to c1
             %ets:insert(peer_rates, [{"subscription", lists:nth(1, ets:lookup_element(c1, "peer", 2))}]),
@@ -649,24 +649,24 @@ schedule_rate_class_info_propagation() ->
 %% @private
 schedule_rate_propagation_c1() ->
     lager:debug("LASPVIN rate_propagation_c1"),
-    lager:error("C1 propagation ~p ~n", [time_stamp()]),
+    %lager:error("C1 propagation ~p ~n", [time_stamp()]),
     %5000 milliseconds is 5 seconds
     timer:send_after(os:getenv("RATE_C1", 5000), rate_prop_c1).
 
 %% @private
 schedule_rate_propagation_c2() ->
     lager:debug("LASPVIN rate_propagation_c2"),
-    lager:error("C2 propagation ~p ~n", [time_stamp()]),
+    %lager:error("C2 propagation ~p ~n", [time_stamp()]),
     %22500 milliseconds is 22.5 seconds
     timer:send_after(os:getenv("RATE_C2", 22500), rate_prop_c2).
 
 %% @private
 schedule_rate_propagation_c3() ->
     lager:debug("LASPVIN rate_propagation_c3"),
-    lager:error("C3 propagation ~p ~n", [time_stamp()]),
+    %lager:error("C3 propagation ~p ~n", [time_stamp()]),
     %22500 milliseconds is 22.5 seconds
     timer:send_after(os:getenv("RATE_C3", 45500), rate_prop_c3).
-
+os:getenv("RATE_C2").
 %% @private
 propagate_by_class(Class, Sub) ->
     lasp_logger:extended("Beginning delta synchronization by class."),
@@ -870,9 +870,10 @@ forward_aq_lock(Id) ->
                 true ->
                     %check find_sub if there are any other nodes requiring same rate,
                     %if there are inform them 
-                    lager:debug("LASPVIN Locking reached chain end");
+                    lager:error("LASPVIN Locking reached chain end for Id:~p ~n", [Id]);
                 false ->
                     %pass on the lock & delete find_sub_aq entry
+                    lager:error("LASPVIN Forwarding lock for ID:~p ~n", [Id]),
                     ?SYNC_BACKEND:send(?MODULE, {find_sub_aq_lock, Id, lasp_support:mynode()},ets:lookup_element(find_sub_aq, Id, 2))
                     %ets:delete(find_sub_aq, Id)
     end.
