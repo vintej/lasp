@@ -245,14 +245,14 @@ handle_cast({delta_ack, From, Id, Counter}, #state{store=Store}=State) ->
 handle_cast({find_sub_aq, Id, ToNode, From}, #state{store=Store}=State) ->
     lasp_marathon_simulations:log_message_queue_size("find_sub_aq"),
     lager:debug("LASPVIN Store ~p ~n",[Store]),
-    lager:debug("LASPVIN received find_sub_aq for Id:~p From:~p ~n", [Id, From]),
+    lager:error("LASPVIN received find_sub_aq for Id:~p From:~p ~n", [Id, From]),
     case ets:member(find_sub_aq, Id) of
         true ->
             case ets:member(peer_rates, ToNode) of
-                true -> lager:debug("LASPVIN ToNode ~p is a Peer.. Skipping ~n", [ToNode]), ok;
+                true -> lager:error("LASPVIN ToNode ~p is a Peer.. Skipping ~n", [ToNode]), ok;
                 false ->
                     case lists:member([ToNode], ets:match(find_sub_aq, {'_', '$1', '_'})) of
-                        true -> lager:debug("LASPVIN path ToNode: ~p exists ~n",[ToNode]);
+                        true -> lager:error("LASPVIN path ToNode: ~p exists ~n",[ToNode]);
                         false -> found_sub_aq_lockpath(Id, ToNode, From)
                     end
                     %case ets:member(c1, "pseudopeer") of
@@ -294,7 +294,7 @@ handle_cast({find_sub_aq_lock, Id, From}, #state{store=Store}=State) ->
 handle_cast({find_sub, From, ReqRate, Id}, #state{store=Store}=State) ->
     lasp_marathon_simulations:log_message_queue_size("find_sub"),
     lager:debug("LASPVIN store:~p ~n", [Store]),
-    lager:debug("LASPVIN received find_sub Id: ~p From: ~p ~n", [Id, From]),
+    lager:error("LASPVIN received find_sub Id: ~p From: ~p ~n", [Id, From]),
     case ets:member(find_sub_aq, Id) of
         true ->
             ok;
@@ -309,7 +309,7 @@ handle_cast({find_sub, From, ReqRate, Id}, #state{store=Store}=State) ->
                         "c1" -> forward_sub_req(Id);
                         "c2" -> lager:debug("LASPVIN Skip forwarding for class c2")
                     end;
-                false -> lager:debug("LASPVIN Request forwarded~n")
+                false -> lager:error("LASPVIN Request forwarded~n")
             end
     end,
     {noreply, State};
@@ -770,7 +770,7 @@ check_sub_exists(From, ReqRate, Id) ->
           case lists:member(Id, ets:lookup_element(find_sub, ReqRate, 2)) of
              true -> lager:debug("LASPVIN Find_sub request id exists");
              false -> 
-                lager:debug("LASPVIN Matching find_sub rates found~n"),
+                lager:error("LASPVIN Matching find_sub rates found~n"),
                 lager:debug("LASPVIN find_sub:insert ReqRate:~p Id:~p From:~p ~n", [ReqRate, Id, From]),
                 ets:insert(find_sub, [{ReqRate, Id, From}]),
                 found_sub(Id, erlang:list_to_atom(string:sub_string(lists:nth(1,ets:lookup_element(find_sub, ReqRate, 2)), 1, string:len(lists:nth(1, ets:lookup_element(find_sub, ReqRate, 2)))-2)))
@@ -841,7 +841,7 @@ found_sub(Id, ToNode) ->
     case erlang:list_to_atom(string:substr(Id, 1, string:len(Id)-2)) == ToNode of
         true -> lager:debug("LASPVIN False call");
         false ->
-            lager:debug("LASPVIN found the peer at ~p for ID: ~p ToNode: ~p ~n", [time_stamp(), Id, ToNode]),
+            lager:error("LASPVIN found the peer at ~p for ID: ~p ToNode: ~p ~n", [time_stamp(), Id, ToNode]),
             case ets:member(find_sub_aq, Id) of
                 true -> ok;
                 false ->
