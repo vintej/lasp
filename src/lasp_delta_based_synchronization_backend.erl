@@ -651,21 +651,21 @@ schedule_rate_propagation_c1() ->
     lager:debug("LASPVIN rate_propagation_c1"),
     %lager:error("C1 propagation ~p ~n", [time_stamp()]),
     %5000 milliseconds is 5 seconds
-    timer:send_after(os:getenv("RATE_C1", 5000), rate_prop_c1).
+    timer:send_after(5000), rate_prop_c1).
 
 %% @private
 schedule_rate_propagation_c2() ->
     lager:debug("LASPVIN rate_propagation_c2"),
     %lager:error("C2 propagation ~p ~n", [time_stamp()]),
     %22500 milliseconds is 22.5 seconds
-    timer:send_after(os:getenv("RATE_C2", 22500), rate_prop_c2).
+    timer:send_after(22500), rate_prop_c2).
 
 %% @private
 schedule_rate_propagation_c3() ->
     lager:debug("LASPVIN rate_propagation_c3"),
     %lager:error("C3 propagation ~p ~n", [time_stamp()]),
     %22500 milliseconds is 22.5 seconds
-    timer:send_after(os:getenv("RATE_C3", 45500), rate_prop_c3).
+    timer:send_after(45500), rate_prop_c3).
 os:getenv("RATE_C2").
 %% @private
 propagate_by_class(Class, Sub) ->
