@@ -257,7 +257,9 @@ handle_cast({find_sub_aq, Id, ToNode, From}, #state{store=Store}=State) ->
                     %Change this to if psudopeer exists, and add psudopeer in found_sub_aq_lockpath
                     case lists:member([ToNode], ets:match(find_sub_aq, {'_', '$1', '_'})) of
                         true -> lager:error("LASPVIN path ToNode: ~p exists ~n",[ToNode]);
-                        false -> found_sub_aq_lockpath(Id, ToNode, From)
+                        false -> 
+                            lager:error("LASPVINDEBUG found_sub_aq_lockpath ~n"),
+                            found_sub_aq_lockpath(Id, ToNode, From)
                     end
                     %case ets:member(c1, "pseudopeer") of
                     %    true -> 
@@ -795,12 +797,15 @@ check_sub_exists(From, ReqRate, Id) ->
           case lists:member(Id, ets:lookup_element(find_sub, ReqRate, 2)) of
              true -> lager:debug("LASPVIN Find_sub request id exists");
              false -> 
-                lager:error("LASPVIN Matching find_sub rates found~n"),
+                lager:error("LASPVINDEBUG Matching find_sub rates found~n"),
                 lager:debug("LASPVIN find_sub:insert ReqRate:~p Id:~p From:~p ~n", [ReqRate, Id, From]),
+                lager:error("LASPVINDEBUG Informing ~p that found peer for ID:~ toNode: ~p ~n", [lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1'}))), lists:nth(1, ets:lookup_element(find_sub, ReqRate, 2)), string:substr(Id, 1, string:len(Id)-2)]),
                 found_sub(lists:nth(1, ets:lookup_element(find_sub, ReqRate, 2)), string:substr(Id, 1, string:len(Id)-2)),
                 ets:insert(match_sub_aq, [{Id, lists:nth(1, ets:lookup_element(find_sub, ReqRate, 2))}]),
                 ets:insert(match_sub_aq, [{lists:nth(1, ets:lookup_element(find_sub, ReqRate, 2)), Id}]),
                 ets:insert(find_sub, [{ReqRate, Id, From}]),
+                lager:error("LASPVINDEBUG Added match_sub_aq ~p ~n", [ets:tab2list(match_sub_aq)]),
+                lager:error("LASPVIN Informing ~p that found peer for ID:~ toNode: ~p ~n", [From, Id, erlang:list_to_atom(string:sub_string(lists:nth(1,ets:lookup_element(find_sub, ReqRate, 2)), 1, string:len(lists:nth(1, ets:lookup_element(find_sub, ReqRate, 2)))-2))]),
                 found_sub(Id, erlang:list_to_atom(string:sub_string(lists:nth(1,ets:lookup_element(find_sub, ReqRate, 2)), 1, string:len(lists:nth(1, ets:lookup_element(find_sub, ReqRate, 2)))-2)))
           end;
        false ->
@@ -871,7 +876,7 @@ found_sub(Id, ToNode) ->
         false ->
             lager:error("LASPVIN found the peer at ~p for ID: ~p ToNode: ~p ~n", [time_stamp(), Id, ToNode]),
             case ets:member(find_sub_aq, Id) of
-                true -> ok;
+                true -> lager:error("LASPVIN find_sub_aq Id exists not forwarding found_sub"), ok;
                 false ->
                     ets:insert(find_sub_aq, [{Id, ToNode, lasp_support:mynode()}]),
                     %timer:sleep(5),
@@ -884,11 +889,12 @@ found_sub(Id, ToNode) ->
 found_sub_aq_lockpath(Id, ToNode, From) ->
     case lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1'}))) == lasp_support:mynode() of
                 true ->
-                    lager:error("LASPVIN Got path to ~p ID:~p ~n", [ToNode, Id]),
+                    lager:error("LASPVIN Got path to ~p ID:~p From: ~p ~n", [ToNode, Id, From]),
                     ets:insert(find_sub_aq, [{Id, ToNode, From}]),
                     ets:insert(c1, [{"pseudopeer", ToNode}]),
                     ?SYNC_BACKEND:send(?MODULE, {find_sub_aq_lock, Id, lasp_support:mynode()}, From);
-                false -> 
+                false ->
+                    lager:error("LASPVINDEBUG FLrwarding find_sub_aq for Id: ~p ToNode:~p From:~p to ~p ~n", [Id, ToNode, From, lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1'})))]), 
                     ets:insert(find_sub_aq, [{Id, ToNode, From}]),
                     ?SYNC_BACKEND:send(?MODULE, {find_sub_aq, Id, ToNode, lasp_support:mynode()}, lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1'}))))
     end.
@@ -905,14 +911,16 @@ forward_aq_lock(Id, From) ->
                             %Gandtay
                             case lists:nth(1,lists:nth(1,ets:match(find_sub, {'_', Id, '$1'}))) == From of
                                 true -> 
+                                    lager:error("LASPVIN Sending lock_rev to ~p ~n", [lists:nth(1,lists:nth(1,ets:match(find_sub, {'_', ets:lookup_element(match_sub_aq, Id, 2), '$1'})))]),
                                     ?SYNC_BACKEND:send(?MODULE, {find_sub_aq_lock_rev, ets:lookup_element(match_sub_aq, Id, 2), lasp_support:mynode()},lists:nth(1,lists:nth(1,ets:match(find_sub, {'_', ets:lookup_element(match_sub_aq, Id, 2), '$1'}))));
                                 false ->
+                                    lager:error("LASPVIN sending lock_rev to ~p ~n", [lists:nth(1,lists:nth(1,ets:match(find_sub, {'_', Id, '$1'})))]),
                                     ?SYNC_BACKEND:send(?MODULE, {find_sub_aq_lock_rev, ets:lookup_element(match_sub_aq, Id, 2), lasp_support:mynode()},lists:nth(1,lists:nth(1,ets:match(find_sub, {'_', Id, '$1'}))))
                             end;
                         false ->
                             %check find_sub if there are any other nodes requiring same rate,
                             %if there are inform them 
-                            lager:error("LASPVIN Locking reached chain end for Id:~p ~n", [Id])
+                            lager:error("LASPVIN Locking reached chain end for Id:~p Reveied from ~p ~n", [Id, From])
                     end;
                 false ->
                     %pass on the lock & delete find_sub_aq entry
@@ -928,7 +936,7 @@ forward_aq_lock_rev(Id) ->
                     lager:error("LASPVIN Chain end reached for reverse Id ~p ~n", [Id]);
                 false ->
                     %pass on the lock & delete find_sub_aq entry
-                    lager:error("LASPVIN Forwarding lock for ID:~p to ~p ~n", [Id, lists:nth(1,lists:nth(1,ets:match(find_sub, {'_', Id, '$1'})))]),
+                    lager:error("LASPVIN Forwarding lock rev for ID:~p to ~p ~n", [Id, lists:nth(1,lists:nth(1,ets:match(find_sub, {'_', Id, '$1'})))]),
                     ?SYNC_BACKEND:send(?MODULE, {find_sub_aq_lock_rev, Id, lasp_support:mynode()},lists:nth(1,lists:nth(1,ets:match(find_sub, {'_', Id, '$1'}))))
                     %ets:delete(find_sub_aq, Id)
     end.
