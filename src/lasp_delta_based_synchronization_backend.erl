@@ -799,7 +799,8 @@ check_sub_exists(From, ReqRate, Id) ->
              false -> 
                 lager:error("LASPVINDEBUG Matching find_sub rates found~n"),
                 lager:debug("LASPVIN find_sub:insert ReqRate:~p Id:~p From:~p ~n", [ReqRate, Id, From]),
-                lager:error("LASPVINDEBUG Informing ~p that found peer for ID:~ toNode: ~p ~n", [lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1'}))), lists:nth(1, ets:lookup_element(find_sub, ReqRate, 2)), string:substr(Id, 1, string:len(Id)-2)]),
+                %%%ERROR HERE
+                lager:error("LASPVINDEBUG Informing ~p that found peer for ID:~ toNode: ~p ~n", [lists:nth(1,ets:lookup_element(find_sub, ReqRate, 3)), lists:nth(1, ets:lookup_element(find_sub, ReqRate, 2)), string:substr(Id, 1, string:len(Id)-2)]),
                 found_sub(lists:nth(1, ets:lookup_element(find_sub, ReqRate, 2)), string:substr(Id, 1, string:len(Id)-2)),
                 ets:insert(match_sub_aq, [{Id, lists:nth(1, ets:lookup_element(find_sub, ReqRate, 2))}]),
                 ets:insert(match_sub_aq, [{lists:nth(1, ets:lookup_element(find_sub, ReqRate, 2)), Id}]),
