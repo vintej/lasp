@@ -904,7 +904,7 @@ found_sub_aq_lockpath(Id, ToNode, From) ->
 
 %%private
 forward_aq_lock(Id, From) ->
-    case ets:lookup_element(find_sub_aq, Id, 3) == lasp_support:mynode() of
+    case lists:nth(1, ets:lookup_element(find_sub_aq, Id, 3)) == lasp_support:mynode() of
                 true ->
                     case ets:member(match_sub_aq, Id) of
                         true ->
@@ -926,7 +926,7 @@ forward_aq_lock(Id, From) ->
                 false ->
                     %pass on the lock & delete find_sub_aq entry
                     lager:error("LASPVIN Forwarding lock for ID:~p to ~p ~n", [Id, ets:lookup_element(find_sub_aq, Id, 3)]),
-                    ?SYNC_BACKEND:send(?MODULE, {find_sub_aq_lock, Id, lasp_support:mynode()},ets:lookup_element(find_sub_aq, Id, 3))
+                    ?SYNC_BACKEND:send(?MODULE, {find_sub_aq_lock, Id, lasp_support:mynode()}, lists:nth(1,ets:lookup_element(find_sub_aq, Id, 3)))
                     %ets:delete(find_sub_aq, Id)
     end.
 
