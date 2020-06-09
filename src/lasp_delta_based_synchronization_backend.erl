@@ -875,7 +875,7 @@ forward_aq_lock(Id) ->
                 false ->
                     %pass on the lock & delete find_sub_aq entry
                     lager:error("LASPVIN Forwarding lock for ID:~p ~n", [Id]),
-                    ?SYNC_BACKEND:send(?MODULE, {find_sub_aq_lock, Id, lasp_support:mynode()},ets:lookup_element(find_sub_aq, Id, 2))
+                    ?SYNC_BACKEND:send(?MODULE, {find_sub_aq_lock, Id, lasp_support:mynode()},ets:lookup_element(find_sub_aq, Id, 3))
                     %ets:delete(find_sub_aq, Id)
     end.
 
