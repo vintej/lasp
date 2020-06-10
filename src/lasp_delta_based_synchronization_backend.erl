@@ -793,6 +793,7 @@ check_subscription() ->
 %%private
 forward_sub_req(Id) ->
    lager:debug("LASPVIN no c1 peer to subscribe forwarding to peers ~n"),
+   lager:error("Forwarding Req Id ~p to Peers ~n", [Id]),
    timer:sleep(2),
    lists:foreach(fun(Peer) ->
       case lists:member(Peer, ets:lookup_element(find_sub, "c1", 3)) of
@@ -914,12 +915,14 @@ found_sub_aq_lockpath(Id, ToNode, Via, From) ->
             case lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1'}))) == lasp_support:mynode() of
                 true ->
                     timer:sleep(5),
-                    case ets:member(peer_rates, Via) of
+                    case lists:member(Via, get_peers()) of
                         true -> lager:error("Skipping as Via ~p is a peer for Id:~p ToNode:~p From:~p", [Via, Id, ToNode, From]);
                         false ->
                             lager:error("LASPVIN Got path to ~p ID:~p From:~p Via:~p ~n", [ToNode, Id, From, Via]),
                             lager:error("LASPVIN Via ~p not in peer_rates: ~p", [Via, ets:tab2list(peer_rates)]),
+                            lager:error("See if you can spot Via ~p in get_peers() ~p ~n",[Via, get_peers()]),
                             ets:insert(c1, [{"pseudopeer", ToNode}]),
+                            lager:error("Sending Lock for Id ~p to ~p ~n", [Id, From]),
                             ?SYNC_BACKEND:send(?MODULE, {find_sub_aq_lock, Id, lasp_support:mynode()}, From)
                     end;
                 false ->
