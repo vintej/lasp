@@ -888,6 +888,8 @@ found_sub(Id, ToNode) ->
 
 %%private
 found_sub_aq_lockpath(Id, ToNode, From) ->
+    lager:error("LASPVINDEBUGERROR find_sub ~p ~n",[ets:tab2list(find_sub)] ),
+    lager:error("LASPVINERROR here ~p ~n", [lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1'})))]),
     case lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1'}))) == lasp_support:mynode() of
                 true ->
                     lager:error("LASPVIN Got path to ~p ID:~p From: ~p ~n", [ToNode, Id, From]),
