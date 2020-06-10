@@ -326,6 +326,7 @@ handle_cast({find_sub, From, ReqRate, Id}, #state{store=Store}=State) ->
         true ->
             ok;
         false ->
+            timer:sleep(2),
             case ets:lookup_element(peer_rates, "self_rate", 2) == ReqRate of
                 true -> ets:insert(find_sub, {ReqRate, Id, From}), found_sub(Id, lasp_support:mynode());
                 false -> check_sub_exists(From, ReqRate, Id)
@@ -778,6 +779,7 @@ check_subscription() ->
 %%private
 forward_sub_req(Id) ->
    lager:debug("LASPVIN no c1 peer to subscribe forwarding to peers ~n"),
+   timer:sleep(2),
    lists:foreach(fun(Peer) ->
       case lists:member(Peer, ets:lookup_element(find_sub, "c1", 3)) of
          true -> ok;
@@ -792,6 +794,7 @@ forward_sub_req(Id) ->
 
 %% @private
 check_sub_exists(From, ReqRate, Id) ->
+    timer:sleep(2),
     case ets:member(find_sub, ReqRate) of
        true ->
           case lists:member(Id, ets:lookup_element(find_sub, ReqRate, 2)) of
@@ -910,15 +913,18 @@ forward_aq_lock(Id, From) ->
                 true ->
                     case ets:member(match_sub_aq, Id) of
                         true ->
-                            lager:error("LASPVIN forwarding Matching Request Lock for Id ~p ~n", [Id]),
+                            lager:error("LASPVIN forwarding Matching Request Lock for Id ~p From:~p ~n", [Id, From]),
                             %Gandtay
                             case lists:nth(1,lists:nth(1,ets:match(find_sub, {'_', Id, '$1'}))) == From of
                                 true -> 
-                                    lager:error("LASPVIN Sending lock_rev to ~p ~n", [lists:nth(1,lists:nth(1,ets:match(find_sub, {'_', ets:lookup_element(match_sub_aq, Id, 2), '$1'})))]),
-                                    ?SYNC_BACKEND:send(?MODULE, {find_sub_aq_lock_rev, ets:lookup_element(match_sub_aq, Id, 2), lasp_support:mynode()},lists:nth(1,lists:nth(1,ets:match(find_sub, {'_', ets:lookup_element(match_sub_aq, Id, 2), '$1'}))));
+                                    lager:error("LASPVIN Have to Send lock_rev for Id:~p  Find_sub: ~p Match_sub_aq: ~p ~n", [Id, ets:tab2list(find_sub), ets:tab2list(match_sub_aq)]),
+                                    ok;
+                                    %?SYNC_BACKEND:send(?MODULE, {find_sub_aq_lock_rev, ets:lookup_element(match_sub_aq, Id, 2), lasp_support:mynode()},lists:nth(1,lists:nth(1,ets:match(find_sub, {'_', ets:lookup_element(match_sub_aq, Id, 2), '$1'}))));                                
                                 false ->
-                                    lager:error("LASPVIN sending lock_rev to ~p ~n", [lists:nth(1,lists:nth(1,ets:match(find_sub, {'_', Id, '$1'})))]),
-                                    ?SYNC_BACKEND:send(?MODULE, {find_sub_aq_lock_rev, ets:lookup_element(match_sub_aq, Id, 2), lasp_support:mynode()},lists:nth(1,lists:nth(1,ets:match(find_sub, {'_', Id, '$1'}))))
+                                    lager:error("LASPVIN Have to Send lock_rev for Id:~p  Find_sub: ~p Match_sub_aq: ~p ~n", [Id, ets:tab2list(find_sub), ets:tab2list(match_sub_aq)]),
+                                    %lager:error("LASPVIN sending lock_rev to ~p ~n", [lists:nth(1,lists:nth(1,ets:match(find_sub, {'_', Id, '$1'})))]),
+                                    ok
+                                    %?SYNC_BACKEND:send(?MODULE, {find_sub_aq_lock_rev, ets:lookup_element(match_sub_aq, Id, 2), lasp_support:mynode()},lists:nth(1,lists:nth(1,ets:match(find_sub, {'_', Id, '$1'}))))
                             end;
                         false ->
                             %check find_sub if there are any other nodes requiring same rate,
