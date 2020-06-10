@@ -64,8 +64,8 @@ extract_log_type_and_payload({rate_subscribe, Node, Rate}) ->
     [{delta_send_protocol, {Node, Rate}}];
 extract_log_type_and_payload({find_sub, Node, Rate, Id}) ->
     [{delta_send_protocol, {Node, Rate, Id}}];
-extract_log_type_and_payload({find_sub_aq, Id, ToNode, Via, Node}) ->
-    [{delta_send_protocol, {Id, ToNode, Via, Node}}];
+extract_log_type_and_payload({find_sub_aq, Id, ToNode, Node, Node}) ->
+    [{delta_send_protocol, {Id, ToNode, Node, Node}}];
 extract_log_type_and_payload({find_sub_aq_lock, Id, Node}) ->
     [{delta_send_protocol, {Id, Node}}];
 extract_log_type_and_payload({find_sub_aq_lock_rev, Id, Node}) ->
