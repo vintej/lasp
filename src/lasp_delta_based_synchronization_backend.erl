@@ -671,6 +671,7 @@ time_stamp() ->
 
 %% @private
 peer_rate_update(From, NewRate, OldRate) ->
+    lager:error("Received new rate from ~p with new rate ~p", [From, NewRate]),
     case OldRate of
         "c1" -> ets:delete_object(c1, {"peer", From});
         "c2" -> ets:delete_object(c2, {"peer", From});
@@ -907,7 +908,6 @@ found_sub(Id, ToNode, Via) ->
 %%private
 found_sub_aq_lockpath(Id, ToNode, Via, From) ->
     lager:error("LASPVINDEBUGERROR find_sub ~p ~n",[ets:tab2list(find_sub)] ),
-    ets:insert(find_sub_aq, [{Id, ToNode, From}]),
     timer:sleep(2),
     lager:error("LASPVINERROR here ~p ~n", [ets:match(find_sub, {'_', Id, '$1'})]),
     case lists:member(Id, ets:lookup_element(find_sub, "c1", 2)) of
@@ -918,6 +918,7 @@ found_sub_aq_lockpath(Id, ToNode, Via, From) ->
                     case lists:member(Via, get_peers()) of
                         true -> lager:error("Skipping as Via ~p is a peer for Id:~p ToNode:~p From:~p", [Via, Id, ToNode, From]);
                         false ->
+                            ets:insert(find_sub_aq, [{Id, ToNode, From}]),
                             lager:error("LASPVIN Got path to ~p ID:~p From:~p Via:~p ~n", [ToNode, Id, From, Via]),
                             lager:error("LASPVIN Via ~p not in peer_rates: ~p", [Via, ets:tab2list(peer_rates)]),
                             lager:error("See if you can spot Via ~p in get_peers() ~p ~n",[Via, get_peers()]),
@@ -926,6 +927,7 @@ found_sub_aq_lockpath(Id, ToNode, Via, From) ->
                             ?SYNC_BACKEND:send(?MODULE, {find_sub_aq_lock, Id, lasp_support:mynode()}, From)
                     end;
                 false ->
+                    ets:insert(find_sub_aq, [{Id, ToNode, From}]),
                     lager:error("LASPVINDEBUG FLrwarding find_sub_aq for Id: ~p ToNode:~p From:~p to ~p ~n", [Id, ToNode, From, lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1'})))]), 
                     ?SYNC_BACKEND:send(?MODULE, {find_sub_aq, Id, ToNode, Via, lasp_support:mynode()}, lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1'}))))
             end;
