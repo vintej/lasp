@@ -324,11 +324,15 @@ handle_cast({find_sub, From, ReqRate, Id}, #state{store=Store}=State) ->
     lager:error("LASPVIN received find_sub Id: ~p From: ~p ~n", [Id, From]),
     case ets:member(find_sub_aq, Id) of
         true ->
+            lager:error("LASPVIN find_sub_aq exists for this find_sub ~p ~n", [Id]),
             ok;
         false ->
             timer:sleep(2),
             case ets:lookup_element(peer_rates, "self_rate", 2) == ReqRate of
-                true -> ets:insert(find_sub, {ReqRate, Id, From}), found_sub(Id, lasp_support:mynode(), lasp_support:mynode());
+                true ->
+                    timer:sleep(2),
+                    insert_findSub(ReqRate, Id, From),
+                    found_sub(Id, lasp_support:mynode(), lasp_support:mynode());
                 false -> check_sub_exists(From, ReqRate, Id)
             end,
             case ets:member(find_sub_aq, Id) of
@@ -630,6 +634,16 @@ get_members(ListToGet) ->
     ets:tab2list(ListToGet).
 
 %% @private
+insert_findSub(ReqRate, Id, From)->
+    timer:sleep(4),
+    case list:member(erlang:list_to_atom(string:substr(Id, 1, string:len(Id)-2)), get_peers()) of
+                        true -> 
+                            lager:error("Request Id ~p is from a Peer directly", [Id]),
+                            ets:insert(find_sub, {ReqRate, Id, erlang:list_to_atom(string:substr(Id, 1, string:len(Id)-2))});
+                        false -> ets:insert(find_sub, {ReqRate, Id, From})
+    end.
+
+%% @private
 peer_rate_insert(From, Rate) ->
     case Rate of
              "c1" ->
@@ -768,7 +782,7 @@ check_subscription() ->
                       case ets:member(find_sub, ets:lookup_element(peer_rates, "self_rate", 2)) of
                          true -> lager:debug("Find_sub_req exists for the class");
                          false -> 
-                            ets:insert(find_sub, [{"c1", erlang:atom_to_list(lasp_support:mynode())++"c1", lasp_support:mynode()}]),
+                            insert_findSub("c1", erlang:atom_to_list(lasp_support:mynode())++"c1", lasp_support:mynode()),
                             lager:error("Requesting c1 sub ~n"),
                             forward_sub_req(erlang:atom_to_list(lasp_support:mynode())++"c1")
                       end
@@ -807,13 +821,13 @@ check_sub_exists(From, ReqRate, Id) ->
                 found_sub(lists:nth(1, ets:lookup_element(find_sub, ReqRate, 2)), string:substr(Id, 1, string:len(Id)-2), From),
                 ets:insert(match_sub_aq, [{Id, lists:nth(1, ets:lookup_element(find_sub, ReqRate, 2))}]),
                 ets:insert(match_sub_aq, [{lists:nth(1, ets:lookup_element(find_sub, ReqRate, 2)), Id}]),
-                ets:insert(find_sub, [{ReqRate, Id, From}]),
+                insert_findSub(ReqRate, Id, From),
                 lager:error("LASPVINDEBUG Added match_sub_aq ~p ~n", [ets:tab2list(match_sub_aq)]),
                 lager:error("LASPVIN Informing ~p that found peer for ID:~ toNode: ~p Via:~p ~n", [From, Id, erlang:list_to_atom(string:sub_string(lists:nth(1,ets:lookup_element(find_sub, ReqRate, 2)), 1, string:len(lists:nth(1, ets:lookup_element(find_sub, ReqRate, 2)))-2)), lists:nth(1,ets:lookup_element(find_sub, "c1", 3))]),
                 found_sub(Id, erlang:list_to_atom(string:sub_string(lists:nth(1,ets:lookup_element(find_sub, ReqRate, 2)), 1, string:len(lists:nth(1, ets:lookup_element(find_sub, ReqRate, 2)))-2)), lists:nth(1,ets:lookup_element(find_sub, "c1", 3)))
           end;
        false ->
-          ets:insert(find_sub, {ReqRate, Id, From}),
+          insert_findSub(ReqRate, Id, From),
           lager:debug("LASPVIN test2 coming here 1"),
           case ReqRate of
              "c1" ->
