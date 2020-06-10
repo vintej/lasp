@@ -636,7 +636,7 @@ get_members(ListToGet) ->
 %% @private
 insert_findSub(ReqRate, Id, From)->
     timer:sleep(4),
-    case list:member(erlang:list_to_atom(string:substr(Id, 1, string:len(Id)-2)), get_peers()) of
+    case lists:member(erlang:list_to_atom(string:substr(Id, 1, string:len(Id)-2)), get_peers()) of
                         true -> 
                             lager:error("Request Id ~p is from a Peer directly", [Id]),
                             ets:insert(find_sub, {ReqRate, Id, erlang:list_to_atom(string:substr(Id, 1, string:len(Id)-2))});
