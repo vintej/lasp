@@ -64,8 +64,8 @@ extract_log_type_and_payload({rate_subscribe, Node, Rate}) ->
     [{delta_send_protocol, {Node, Rate}}];
 extract_log_type_and_payload({find_sub, Node, Rate, Id}) ->
     [{delta_send_protocol, {Node, Rate, Id}}];
-extract_log_type_and_payload({find_sub_aq, Id, ToNode, Node, Node}) ->
-    [{delta_send_protocol, {Id, ToNode, Node, Node}}];
+extract_log_type_and_payload({find_sub_aq, Id, ToNode, ViaNode, Node}) ->
+    [{delta_send_protocol, {Id, ToNode, ViaNode, Node}}];
 extract_log_type_and_payload({find_sub_aq_lock, Id, Node}) ->
     [{delta_send_protocol, {Id, Node}}];
 extract_log_type_and_payload({find_sub_aq_lock_rev, Id, Node}) ->
@@ -894,8 +894,10 @@ found_sub_aq_lockpath(Id, ToNode, Via, From) ->
     lager:error("LASPVINDEBUGERROR find_sub ~p ~n",[ets:tab2list(find_sub)] ),
     ets:insert(find_sub_aq, [{Id, ToNode, From}]),
     timer:sleep(2),
-    lager:error("LASPVINERROR here ~p ~n", [lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1'})))]),
-    case lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1'}))) == lasp_support:mynode() of
+    lager:error("LASPVINERROR here ~p ~n", [ets:match(find_sub, {'_', Id, '$1'})]),
+    case lists:member(Id, ets:lookup_element(find_sub, "c1", 2)) of
+        true ->
+            case lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1'}))) == lasp_support:mynode() of
                 true ->
                     case ets:member(peer_rates, Via) of
                         true -> lager:error("Skipping as Via ~p is a peer for Id:~p ToNode:~p From:~p", [Via, Id, ToNode, From]);
@@ -907,6 +909,9 @@ found_sub_aq_lockpath(Id, ToNode, Via, From) ->
                 false ->
                     lager:error("LASPVINDEBUG FLrwarding find_sub_aq for Id: ~p ToNode:~p From:~p to ~p ~n", [Id, ToNode, From, lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1'})))]), 
                     ?SYNC_BACKEND:send(?MODULE, {find_sub_aq, Id, ToNode, Via, lasp_support:mynode()}, lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1'}))))
+            end;
+        false ->
+            lager:error("LASPVIN ID ~p not in find_sub ~p ~n", [Id, ets:tab2list(find_sub)])
     end.
 
 
