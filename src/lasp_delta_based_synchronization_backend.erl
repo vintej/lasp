@@ -767,7 +767,12 @@ get_peers() ->
 
 %% @private
 get_connections() ->
-    lager:error("Meanwhile get_connections() ~p ~n", [ets:lookup_element(myconnections, "connect", 2)]).
+    case ets:first(myconnections) of
+        '$end_of_table' ->
+            lager:error("MyConnections is empty ~n");
+        _Else ->
+            lager:error("Meanwhile get_connections() ~p ~n", [ets:lookup_element(myconnections, "connect", 2)])
+    end.
 
 %% @private
 check_subscription() ->
