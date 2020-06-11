@@ -296,7 +296,8 @@ handle_cast({find_sub_aq_lock, Id, From}, #state{store=Store}=State) ->
             timer:sleep(5),
             lager:error("Deleting this rate_ack after sending updated rate ~p ~n", [ets:tab2list(rate_ack)]),
             lager:error("Rate_ack shown and this are the peers ~p ~n", [get_peers()]),
-            lager:error("Peers Shown and this are the connections ~p ~n", [get_connections()]),
+            lager:error("Peers Shown and this are the get_peers() ~p ~n", [get_peers()]),
+            get_connections(),
             lists:foreach(fun(PeerT) ->
                 {Peer} = PeerT,
                 lager:error("Sending updated rate ~p to ~p ~n", [ets:lookup_element(peer_rates, "self_rate", 2), Peer]),
@@ -648,7 +649,7 @@ get_members(ListToGet) ->
 %% @private
 insert_findSub(ReqRate, Id, From)->
     timer:sleep(4),
-    case lists:member(erlang:list_to_atom(string:substr(Id, 1, string:len(Id)-2)), get_connections()) of
+    case lists:member(erlang:list_to_atom(string:substr(Id, 1, string:len(Id)-2)), get_peers()) of
                         true -> 
                             lager:error("Request Id ~p is from a Peer directly connected", [Id]),
                             ets:insert(find_sub, {ReqRate, Id, erlang:list_to_atom(string:substr(Id, 1, string:len(Id)-2))});
@@ -766,7 +767,7 @@ get_peers() ->
 
 %% @private
 get_connections() ->
-    ets:lookup_element(myconnections, "connect", 2).
+    lager:error("Meanwhile get_connections() ~p ~n", [ets:lookup_element(myconnections, "connect", 2)]).
 
 %% @private
 check_subscription() ->
@@ -822,7 +823,8 @@ forward_sub_req(Id) ->
             end
       end
    end,
-   get_connections()).
+   get_peers()),
+   get_connections().
 
 %% @private
 check_sub_exists(From, ReqRate, Id) ->
@@ -931,13 +933,14 @@ found_sub_aq_lockpath(Id, ToNode, Via, From) ->
             case lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1'}))) == lasp_support:mynode() of
                 true ->
                     timer:sleep(5),
-                    case lists:member(Via, get_connections()) of
+                    case lists:member(Via, get_peers()) of
                         true -> lager:error("Skipping as Via ~p is a peer for Id:~p ToNode:~p From:~p", [Via, Id, ToNode, From]);
                         false ->
                             ets:insert(find_sub_aq, [{Id, ToNode, From}]),
                             lager:error("LASPVIN Got path to ~p ID:~p From:~p Via:~p ~n", [ToNode, Id, From, Via]),
                             lager:error("LASPVIN Via ~p not in peer_rates: ~p", [Via, ets:tab2list(peer_rates)]),
-                            lager:error("See if you can spot Via ~p in get_connections() ~p ~n",[Via, get_connections()]),
+                            lager:error("See if you can spot Via ~p in get_peers() ~p ~n",[Via, get_peers()]),
+                            get_connections(),
                             ets:insert(c1, [{"pseudopeer", ToNode}]),
                             lager:error("Sending Lock for Id ~p to ~p ~n", [Id, From]),
                             ?SYNC_BACKEND:send(?MODULE, {find_sub_aq_lock, Id, lasp_support:mynode()}, From)
