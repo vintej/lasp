@@ -814,7 +814,7 @@ check_sub_exists(From, ReqRate, Id) ->
     case ets:member(find_sub, ReqRate) of
        true ->
           case lists:member(Id, ets:lookup_element(find_sub, ReqRate, 2)) of
-             true -> lager:debug("LASPVIN Find_sub request id exists");
+             true -> lager:debug("LASPVIN Find_sub request id ~p exists ~n", [Id]);
              false -> 
                 lager:error("LASPVINDEBUG Matching find_sub rates found~n"),
                 lager:debug("LASPVIN find_sub:insert ReqRate:~p Id:~p From:~p ~n", [ReqRate, Id, From]),
@@ -928,8 +928,8 @@ found_sub_aq_lockpath(Id, ToNode, Via, From) ->
                     end;
                 false ->
                     ets:insert(find_sub_aq, [{Id, ToNode, From}]),
-                    lager:error("LASPVINDEBUG FLrwarding find_sub_aq for Id: ~p ToNode:~p From:~p to ~p ~n", [Id, ToNode, From, lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1'})))]), 
-                    ?SYNC_BACKEND:send(?MODULE, {find_sub_aq, Id, ToNode, Via, lasp_support:mynode()}, lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1'}))))
+                    lager:error("LASPVINDEBUG Forwarding find_sub_aq for Id: ~p ToNode:~p From:~p to ~p ~n", [Id, ToNode, From, lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1'})))]), 
+                    ?SYNC_BACKEND:send(?MODULE, {find_sub_aq, Id, ToNode, From, lasp_support:mynode()}, lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1'}))))
             end;
         false ->
             lager:error("LASPVIN ID ~p not in find_sub ~p ~n", [Id, ets:tab2list(find_sub)])
