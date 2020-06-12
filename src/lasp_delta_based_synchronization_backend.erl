@@ -261,9 +261,14 @@ handle_cast({find_sub_aq, Id, ToNode, Via, From}, #state{store=Store}=State) ->
                                 false -> found_sub_aq_lockpath(Id, ToNode, Via, From)
                             end;
                         false -> 
-                            lager:error("LASPVIN ToNode ~p is a Peer.. Sending Acklock directly (Id:~p , ToNode:~p, Via:~p, From:~p) ~n", [ToNode, Id, ToNode, Via, Via]),
-                            found_sub_aq_lockpath(Id, ToNode, Via, Via),
-                            ok
+                            case ets:member(peer_rates, Via) of
+                                true ->
+                                    lager:error("LASPVIN ToNode ~p is a Peer.. Sending Acklock directly to Via (Id:~p , ToNode:~p, Via:~p, From:~p) ~n", [ToNode, Id, ToNode, Via, Via]),
+                                    found_sub_aq_lockpath(Id, ToNode, Via, Via),
+                                    ok;
+                                false ->
+                                    lager:error("Not sending lock expecting ToNode to get back as to node is in peer_rates, connections:~p ~n", [get_connections()])
+                            end
                     end;
                 false ->
                     %Change this to if psudopeer exists, and add psudopeer in found_sub_aq_lockpath
@@ -662,7 +667,7 @@ insert_findSub(ReqRate, Id, From)->
                             ets:insert(find_sub, {ReqRate, Id, erlang:list_to_atom(string:substr(Id, 1, string:len(Id)-2))}),
                             lager:error("find_sub with Id in get_connections(): ~p ~n", [ets:tab2list(find_sub)]);
                         false -> 
-                            lager:error("From is not get_connections(): ~p ~n", [get_connections()]),
+                            lager:error("Id is not get_connections(): ~p ~n", [get_connections()]),
                             ets:insert(find_sub, {ReqRate, Id, From}),
                             lager:error("find_sub after Id not get_connections(): ~p ~n", [ets:tab2list(find_sub)])
     end.
@@ -980,11 +985,11 @@ forward_aq_lock(Id, From) ->
                             %Gandtay
                             case lists:nth(1,lists:nth(1,ets:match(find_sub, {'_', Id, '$1'}))) == From of
                                 true -> 
-                                    lager:error("LASPVIN Have to Send lock_rev for Id:~p  Find_sub: ~p Match_sub_aq: ~p ~n", [Id, ets:tab2list(find_sub), ets:tab2list(match_sub_aq)]),
+                                    lager:error("LASPVIN matching 1 Have to Send lock_rev for Id:~p  Find_sub: ~p Match_sub_aq: ~p ~n", [Id, ets:tab2list(find_sub), ets:tab2list(match_sub_aq)]),
                                     ok;
                                     %?SYNC_BACKEND:send(?MODULE, {find_sub_aq_lock_rev, ets:lookup_element(match_sub_aq, Id, 2), lasp_support:mynode()},lists:nth(1,lists:nth(1,ets:match(find_sub, {'_', ets:lookup_element(match_sub_aq, Id, 2), '$1'}))));                                
                                 false ->
-                                    lager:error("LASPVIN Have to Send lock_rev for Id:~p  Find_sub: ~p Match_sub_aq: ~p ~n", [Id, ets:tab2list(find_sub), ets:tab2list(match_sub_aq)]),
+                                    lager:error("LASPVIN matching 2 Have to Send lock_rev for Id:~p  Find_sub: ~p Match_sub_aq: ~p ~n", [Id, ets:tab2list(find_sub), ets:tab2list(match_sub_aq)]),
                                     %lager:error("LASPVIN sending lock_rev to ~p ~n", [lists:nth(1,lists:nth(1,ets:match(find_sub, {'_', Id, '$1'})))]),
                                     ok
                                     %?SYNC_BACKEND:send(?MODULE, {find_sub_aq_lock_rev, ets:lookup_element(match_sub_aq, Id, 2), lasp_support:mynode()},lists:nth(1,lists:nth(1,ets:match(find_sub, {'_', Id, '$1'}))))
