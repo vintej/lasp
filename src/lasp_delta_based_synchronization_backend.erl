@@ -273,7 +273,7 @@ handle_cast({find_sub_aq, Id, ToNode, Via, From, Hop}, #state{store=Store}=State
                     end;
                 false ->
                     %Change this to if psudopeer exists, and add psudopeer in found_sub_aq_lockpath
-                    case lists:member([ToNode], ets:match(find_sub_aq, {'_', '$1', '_'})) of
+                    case lists:member([ToNode], ets:match(find_sub_aq, {'_', '$1', '_', '_'})) of
                         true -> lager:error("LASPVIN path ToNode: ~p exists ~n",[ToNode]);
                         false -> found_sub_aq_lockpath(Id, ToNode, Via, From, Hop)
                     end
