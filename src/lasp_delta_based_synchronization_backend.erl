@@ -659,8 +659,12 @@ insert_findSub(ReqRate, Id, From)->
     case lists:member(erlang:list_to_atom(string:substr(Id, 1, string:len(Id)-2)), get_connections()) of
                         true -> 
                             lager:error("Request Id ~p is from a Peer directly connected", [Id]),
-                            ets:insert(find_sub, {ReqRate, Id, erlang:list_to_atom(string:substr(Id, 1, string:len(Id)-2))});
-                        false -> ets:insert(find_sub, {ReqRate, Id, From})
+                            ets:insert(find_sub, {ReqRate, Id, erlang:list_to_atom(string:substr(Id, 1, string:len(Id)-2))}),
+                            lager:error("find_sub with Id in get_connections(): ~p ~n", [ets:tab2list(find_sub)]);
+                        false -> 
+                            lager:error("From is not get_connections(): ~p ~n", [get_connections()]),
+                            ets:insert(find_sub, {ReqRate, Id, From}),
+                            lager:error("find_sub after Id not get_connections(): ~p ~n", [ets:tab2list(find_sub)])
     end.
 
 %% @private
