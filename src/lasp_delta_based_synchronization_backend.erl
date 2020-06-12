@@ -258,16 +258,17 @@ handle_cast({find_sub_aq, Id, ToNode, Via, From}, #state{store=Store}=State) ->
                         true ->
                             case lists:member([ToNode], ets:match(find_sub_aq, {'_', '$1', '_'})) of
                                 true -> lager:error("LASPVIN path ToNode: ~p exists ~n",[ToNode]);
-                                false -> found_sub_aq_lockpath(Id, ToNode, Via, From)
+                                false -> 
+                                    found_sub_aq_lockpath(Id, ToNode, Via, From)
                             end;
                         false -> 
                             case ets:member(peer_rates, Via) of
                                 true ->
-                                    lager:error("LASPVIN ToNode ~p is a Peer.. Sending Acklock directly to Via (Id:~p , ToNode:~p, Via:~p, From:~p) ~n", [ToNode, Id, ToNode, Via, Via]),
-                                    found_sub_aq_lockpath(Id, ToNode, Via, Via),
+                                    lager:error("LASPVIN ToNode ~p and Via are Peers.. Sending Acklock directly to ToNode (Id:~p , ToNode:~p, Via:~p, From:~p) ~n", [ToNode, Id, ToNode, Via, Via]),
+                                    found_sub_aq_lockpath(Id, ToNode, Via, ToNode),
                                     ok;
                                 false ->
-                                    lager:error("Not sending lock expecting ToNode to get back as to node is in peer_rates, connections:~p ~n", [get_connections()])
+                                    lager:error("Via not in peers, and ToNode is in peer, Not sending lock expecting ToNode to get back as to node is in peer_rates, connections:~p ~n", [get_connections()])
                             end
                     end;
                 false ->
