@@ -979,7 +979,14 @@ found_sub_aq_lockpath(Id, ToNode, Via, From, Hop) ->
                 true ->
                     timer:sleep(5),
                     case lists:member(Via, get_connections()) of
-                        true -> lager:error("Skipping as Via ~p is a peer for Id:~p ToNode:~p From:~p HopCount ~p ~n", [Via, Id, ToNode, From, Hop]);
+                        true -> 
+                            lager:error("Sending aclock directly to Via ~p as it is a peer for Id:~p ToNode:~p From:~p HopCount ~p ~n", [Via, Id, ToNode, From, Hop]),
+                             ets:insert(find_sub_aq, [{Id, ToNode, Via, Hop}]),
+                            lager:error("LASPVIN Got path to ~p ID:~p From:~p Via:~p HopCount:~p ~n", [ToNode, Id, Via, Via, Hop]),
+                            lager:error("LASPVIN Via ~p not in peer_rates: ~p", [Via, ets:tab2list(peer_rates)]),
+                            ets:insert(c1, [{"pseudopeer", ToNode, Hop}]),
+                            lager:error("Sending Lock for Id ~p to ~p ~n", [Id, Via]),
+                            ?SYNC_BACKEND:send(?MODULE, {find_sub_aq_lock, Id, lasp_support:mynode()}, Via);
                         false ->
                             ets:insert(find_sub_aq, [{Id, ToNode, From, Hop}]),
                             lager:error("LASPVIN Got path to ~p ID:~p From:~p Via:~p HopCount:~p ~n", [ToNode, Id, From, Via, Hop]),
