@@ -253,14 +253,23 @@ handle_cast({find_sub_aq, Id, ToNode, Via, From}, #state{store=Store}=State) ->
     case ets:member(find_sub_aq, Id) of
         true ->
             case ets:member(peer_rates, ToNode) of
-                true -> lager:error("LASPVIN ToNode ~p is a Peer.. Skipping ~n", [ToNode]), ok;
+                true -> 
+                    case From==Via of
+                        true ->
+                            case lists:member([ToNode], ets:match(find_sub_aq, {'_', '$1', '_'})) of
+                                true -> lager:error("LASPVIN path ToNode: ~p exists ~n",[ToNode]);
+                                false -> found_sub_aq_lockpath(Id, ToNode, Via, From)
+                            end;
+                        false -> 
+                            lager:error("LASPVIN ToNode ~p is a Peer.. Sending Acklock directly (Id:~p , ToNode:~p, Via:~p, From:~p) ~n", [ToNode, Id, ToNode, Via, Via]),
+                            found_sub_aq_lockpath(Id, ToNode, Via, Via),
+                            ok
+                    end;
                 false ->
                     %Change this to if psudopeer exists, and add psudopeer in found_sub_aq_lockpath
                     case lists:member([ToNode], ets:match(find_sub_aq, {'_', '$1', '_'})) of
                         true -> lager:error("LASPVIN path ToNode: ~p exists ~n",[ToNode]);
-                        false -> 
-                            lager:error("LASPVINDEBUG found_sub_aq_lockpath ~n"),
-                            found_sub_aq_lockpath(Id, ToNode, Via, From)
+                        false -> found_sub_aq_lockpath(Id, ToNode, Via, From)
                     end
                     %case ets:member(c1, "pseudopeer") of
                     %    true -> 
