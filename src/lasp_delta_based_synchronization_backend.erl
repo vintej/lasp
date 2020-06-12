@@ -968,7 +968,7 @@ found_sub_aq_lockpath(Id, ToNode, Via, From) ->
                 false ->
                     ets:insert(find_sub_aq, [{Id, ToNode, From}]),
                     lager:error("LASPVINDEBUG Forwarding find_sub_aq for Id: ~p ToNode:~p From:~p to ~p ~n", [Id, ToNode, From, lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1'})))]), 
-                    ?SYNC_BACKEND:send(?MODULE, {find_sub_aq, Id, ToNode, From, lasp_support:mynode()}, lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1'}))))
+                    ?SYNC_BACKEND:send(?MODULE, {find_sub_aq, Id, ToNode, Via, lasp_support:mynode()}, lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1'}))))
             end;
         false ->
             lager:error("LASPVIN ID ~p not in find_sub ~p ~n", [Id, ets:tab2list(find_sub)])
