@@ -967,9 +967,14 @@ found_sub(Id, ToNode, Via) ->
             case ets:member(find_sub_aq, Id) of
                 true -> lager:error("LASPVIN find_sub_aq Id exists not forwarding found_sub"), ok;
                 false ->
-                    ets:insert(find_sub_aq, [{Id, ToNode, lasp_support:mynode(), 1}]),
                     %timer:sleep(5),
-                    ?SYNC_BACKEND:send(?MODULE, {find_sub_aq, Id, ToNode, Via, lasp_support:mynode(), 1}, lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1'}))))
+                    case Via == lasp_support:mynode() of
+                        true -> 
+                            found_sub_aq_lockpath(Id, ToNode, Via, lasp_support:mynode(), 0);
+                        false -> 
+                            ets:insert(find_sub_aq, [{Id, ToNode, lasp_support:mynode(), 1}]),
+                            ?SYNC_BACKEND:send(?MODULE, {find_sub_aq, Id, ToNode, Via, lasp_support:mynode(), 1}, lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1'}))))
+                    end
             end
     end.
 
