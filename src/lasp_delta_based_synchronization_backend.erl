@@ -689,7 +689,7 @@ get_members(ListToGet) ->
 
 %% @private
 insert_findSub(ReqRate, Id, From)->
-    timer:sleep(4),
+    timer:sleep(10),
     case lists:member(erlang:list_to_atom(string:substr(Id, 1, string:len(Id)-2)), get_connections()) of
                         true -> 
                             lager:error("Request Id ~p is from a Peer directly connected", [Id]),
@@ -984,13 +984,18 @@ found_sub_aq_lockpath(Id, ToNode, Via, From, Hop) ->
                     case lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1'}))) == lasp_support:mynode() of
                         true ->
                             timer:sleep(5),
-                            lager:error("Sending aclock to From ~p For Via ~p for Id:~p ToNode:~p HopCount ~p and I am the source ~n", [From, Via, Id, ToNode, Hop]),
-                            ets:insert(find_sub_aq, [{Id, ToNode, Via, Hop}]),
-                            lager:error("LASPVIN Got path to ~p ID:~p From:~p Via:~p HopCount:~p ~n", [ToNode, Id, Via, Via, Hop]),
-                            lager:error("LASPVIN Check if Via ~p in peer_rates: ~p", [Via, ets:tab2list(peer_rates)]),
-                            ets:insert(c1, [{"pseudopeer", ToNode, Hop}]),
-                            lager:error("Sending Lock for Id ~p to ~p ~n", [Id, Via]),
-                            ?SYNC_BACKEND:send(?MODULE, {find_sub_aq_lock, Id, ToNode, lasp_support:mynode()}, From);
+                            case lists:member(ToNode, get_connections) of
+                                true ->
+                                    lager:error("ToNode ~p is ub connections ~p ~n", [ToNode, get_connections()]);
+                                false ->
+                                    lager:error("Sending aclock to From ~p For Via ~p for Id:~p ToNode:~p HopCount ~p and I am the source ~n", [From, Via, Id, ToNode, Hop]),
+                                    ets:insert(find_sub_aq, [{Id, ToNode, Via, Hop}]),
+                                    lager:error("LASPVIN Got path to ~p ID:~p From:~p Via:~p HopCount:~p ~n", [ToNode, Id, Via, Via, Hop]),
+                                    lager:error("LASPVIN Check if Via ~p in peer_rates: ~p", [Via, ets:tab2list(peer_rates)]),
+                                    ets:insert(c1, [{"pseudopeer", ToNode, Hop}]),
+                                    lager:error("Sending Lock for Id ~p to ~p ~n", [Id, Via]),
+                                    ?SYNC_BACKEND:send(?MODULE, {find_sub_aq_lock, Id, ToNode, lasp_support:mynode()}, From)
+                            end;
                         false ->
                             ets:insert(find_sub_aq, [{Id, ToNode, From, Hop}]),
                             lager:error("LASPVINDEBUG Forwarding find_sub_aq for Id: ~p ToNode:~p From:~p to ~p HopCount:~p ~n", [Id, ToNode, From, lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1'}))), Hop+1]), 
