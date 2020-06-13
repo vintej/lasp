@@ -66,8 +66,8 @@ extract_log_type_and_payload({find_sub, Node, Rate, Id}) ->
     [{delta_send_protocol, {Node, Rate, Id}}];
 extract_log_type_and_payload({find_sub_aq, Id, ToNode, ViaNode, Node, Hop}) ->
     [{delta_send_protocol, {Id, ToNode, ViaNode, Node, Hop}}];
-extract_log_type_and_payload({find_sub_aq_lock, Id, Node}) ->
-    [{delta_send_protocol, {Id, Node}}];
+extract_log_type_and_payload({find_sub_aq_lock, Id, ToNode, Node}) ->
+    [{delta_send_protocol, {Id, ToNode, Node}}];
 extract_log_type_and_payload({find_sub_aq_lock_rev, Id, Node}) ->
     [{delta_send_protocol, {Id, Node}}].
 
@@ -320,14 +320,14 @@ handle_cast({find_sub_aq, Id, ToNode, Via, From, Hop}, #state{store=Store}=State
     end,
     {noreply, State};
 
-handle_cast({find_sub_aq_lock, Id, From}, #state{store=Store}=State) ->
+handle_cast({find_sub_aq_lock, Id, ToNode, From}, #state{store=Store}=State) ->
     lasp_marathon_simulations:log_message_queue_size("find_sub_aq_lock"),
     lager:debug("LASPVIN Store ~p ~n",[Store]),
-    lager:error("LASPVIN received find_sub_aq_lock for Id:~p From:~p ~n", [Id, From]),
+    lager:error("LASPVIN received find_sub_aq_lock for Id:~p ToNode~p From:~p ~n", [Id, ToNode, From]),
     case ets:lookup_element(peer_rates, "self_rate", 2)==lists:nth(1,lists:nth(1,ets:match(find_sub, {'$1',Id, '_' }))) of
         true ->
             lager:error("LASPVIN Rate updated already ~n"),
-            forward_aq_lock(Id, From);
+            forward_aq_lock(Id, ToNode, From);
         false ->
             lager:error("LASPVIN updating rate ~n"),
             ets:update_element(peer_rates, "self_rate", {2, lists:nth(1, lists:nth(1,ets:match(find_sub, {'$1', Id, '_'})))}),
@@ -335,7 +335,7 @@ handle_cast({find_sub_aq_lock, Id, From}, #state{store=Store}=State) ->
             %ets:insert(peer_rates, [{"subscription", lists:nth(1, ets:lookup_element(c1, "peer", 2))}]),
             %?SYNC_BACKEND:send(?MODULE, {rate_subscribe, lasp_support:mynode(), ets:lookup_element(peer_rates, "self_rate", 2)}, lists:nth(1, ets:lookup_element(c1, "peer", 2)))
             %propagate update_rate for all? may be at the end of the function,
-            forward_aq_lock(Id, From),
+            forward_aq_lock(Id, ToNode, From),
             timer:sleep(5),
             lager:error("Deleting this rate_ack after sending updated rate ~p ~n", [ets:tab2list(rate_ack)]),
             lager:error("Rate_ack shown and this are the connections ~p ~n", [get_connections()]),
@@ -984,13 +984,13 @@ found_sub_aq_lockpath(Id, ToNode, Via, From, Hop) ->
                     case lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1'}))) == lasp_support:mynode() of
                         true ->
                             timer:sleep(5),
-                            lager:error("Sending aclock directly to Via ~p as it is a peer for Id:~p ToNode:~p From:~p HopCount ~p and I am the source ~n", [Via, Id, ToNode, From, Hop]),
+                            lager:error("Sending aclock to From ~p For Via ~p for Id:~p ToNode:~p HopCount ~p and I am the source ~n", [From, Via, Id, ToNode, Hop]),
                             ets:insert(find_sub_aq, [{Id, ToNode, Via, Hop}]),
-                            ager:error("LASPVIN Got path to ~p ID:~p From:~p Via:~p HopCount:~p ~n", [ToNode, Id, Via, Via, Hop]),
-                            lager:error("LASPVIN Via ~p not in peer_rates: ~p", [Via, ets:tab2list(peer_rates)]),
+                            lager:error("LASPVIN Got path to ~p ID:~p From:~p Via:~p HopCount:~p ~n", [ToNode, Id, Via, Via, Hop]),
+                            lager:error("LASPVIN Check if Via ~p in peer_rates: ~p", [Via, ets:tab2list(peer_rates)]),
                             ets:insert(c1, [{"pseudopeer", ToNode, Hop}]),
                             lager:error("Sending Lock for Id ~p to ~p ~n", [Id, Via]),
-                            ?SYNC_BACKEND:send(?MODULE, {find_sub_aq_lock, Id, lasp_support:mynode()}, Via);
+                            ?SYNC_BACKEND:send(?MODULE, {find_sub_aq_lock, Id, ToNode, lasp_support:mynode()}, From);
                         false ->
                             ets:insert(find_sub_aq, [{Id, ToNode, From, Hop}]),
                             lager:error("LASPVINDEBUG Forwarding find_sub_aq for Id: ~p ToNode:~p From:~p to ~p HopCount:~p ~n", [Id, ToNode, From, lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1'}))), Hop+1]), 
@@ -1006,7 +1006,7 @@ found_sub_aq_lockpath(Id, ToNode, Via, From, Hop) ->
 
 
 %%private
-forward_aq_lock(Id, From) ->
+forward_aq_lock(Id, ToNode, From) ->
     case lists:nth(1, ets:lookup_element(find_sub_aq, Id, 3)) == lasp_support:mynode() of
                 true ->
                     case ets:member(match_sub_aq, Id) of
@@ -1032,7 +1032,7 @@ forward_aq_lock(Id, From) ->
                 false ->
                     %pass on the lock & delete find_sub_aq entry
                     lager:error("LASPVIN Forwarding lock for ID:~p to ~p ~n", [Id, ets:lookup_element(find_sub_aq, Id, 3)]),
-                    ?SYNC_BACKEND:send(?MODULE, {find_sub_aq_lock, Id, lasp_support:mynode()}, lists:nth(1,ets:lookup_element(find_sub_aq, Id, 3)))
+                    ?SYNC_BACKEND:send(?MODULE, {find_sub_aq_lock, Id, lasp_support:mynode()}, lists:nth(1,lists:nth(1,ets:match(find_sub_aq, {Id, ToNode, '$1', '_'}))))
                     %ets:delete(find_sub_aq, Id)
     end.
 
