@@ -265,7 +265,13 @@ handle_cast({find_sub_aq, Id, ToNode, Via, From, Hop}, #state{store=Store}=State
                                             lager:error("LASPVIN path ToNode: ~p exists find_sub_aq:~p ~n",[ToNode, ets:match(find_sub_aq, {'_', ToNode, '_', '$1'})]),
                                             case Hop < lists:nth(1,lists:nth(1,ets:match(find_sub_aq, {'_', ToNode, '_', '$1'}))) of
                                                 true ->
-                                                    lager:error("Got new path for a peer with lower hopcount ~p ToNode ~p  From ~p for Id ~p Via ~p, can discard this... ~n", [Hop, ToNode, From, Id, Via]),
+                                                    lager:error("Got new path for a peer with lower hopcount ~p ToNode ~p  From ~p for Id ~p Via ~p ~n", [Hop, ToNode, From, Id, Via]),
+                                                    case From==ToNode of
+                                                        true ->
+                                                            lager:error("From==ToNode so forwarding lower hopcount ~p ToNode ~p  From ~p for Id ~p Via ~p ~n", [Hop, ToNode, From, Id, Via]),
+                                                            found_sub_aq_lockpath(Id, ToNode, Via, From, Hop);
+                                                        false -> ok
+                                                    end,
                                                     lager:error("Lower hopcount connection status ~p ~n", [get_connections()]),
                                                     lager:error("Lower hopcount members status ~p ~n", [get_peers()]);
                                                     %found_sub_aq_lockpath(Id, ToNode, Via, From, Hop);
@@ -972,7 +978,17 @@ found_sub(Id, ToNode, Via, Hop) ->
         false ->
             lager:error("LASPVIN found the peer at ~p for ID: ~p ToNode: ~p Via:~p ~n", [time_stamp(), Id, ToNode, Via]),
             case ets:member(find_sub_aq, Id) of
-                true -> lager:error("LASPVIN find_sub_aq Id exists not forwarding found_sub"), ok;
+                true -> 
+                    lager:error("LASPVIN find_sub_aq Id exists not forwarding found_sub"),
+                    case Hop < lists:nth(1,lists:nth(1,ets:match(find_sub, {'_', Id, '_', '$1'}))) of
+                        true -> 
+                            lager:error("Sub_aq exists for Id:~p but HopCount:~p is lower than existing hopcount:~p .. Forwarding request ~n", [Id, Hop, lists:nth(1,lists:nth(1,ets:match(find_sub, {'_', Id, '_', '$1'})))]),
+                            ets:insert(find_sub_aq, [{Id, ToNode, lasp_support:mynode(), Hop}]),
+                            ?SYNC_BACKEND:send(?MODULE, {find_sub_aq, Id, ToNode, Via, lasp_support:mynode(), Hop}, lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1', '_'}))));
+                        false ->
+                            lager:error("Sub_aq exists and Hop:~p > existing HopCount:~p ~n", [Hop, lists:nth(1,lists:nth(1,ets:match(find_sub, {'_', Id, '_', '$1'})))])
+                    end,
+                    ok;
                 false ->
                     %timer:sleep(5),
                     case Via == lasp_support:mynode() of
