@@ -293,7 +293,7 @@ handle_cast({find_sub_aq, Id, ToNode, Via, From, Hop}, #state{store=Store}=State
                             case lists:member([ToNode], ets:match(find_sub_aq, {'_', '$1', '_', '_'})) of
                                 true -> 
                                     lager:error("LASPVIN path ToNode: ~p exists ~p ~n",[ToNode, ets:match(find_sub_aq, {'_', '$1', '_', '_'})]),
-                                    case Hop < lists:nth(1,lists:nth(1, ets:match(find_sub_aq, {Id, ToNode, '_', '$1'}))) of
+                                    case Hop < lists:nth(1,lists:nth(1, ets:match(find_sub_aq, {'_', ToNode, '_', '$1'}))) of
                                         true ->
                                             lager:error("Got new path with lower hopcount ~p ToNode ~p  From ~p for Id ~p Via ~p ~n", [Hop, ToNode, From, Id, Via]),
                                             lager:error("Lower hopcount connection status ~p ~n", [get_connections()]),
