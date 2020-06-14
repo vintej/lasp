@@ -386,7 +386,7 @@ handle_cast({find_sub, From, ReqRate, Id}, #state{store=Store}=State) ->
                 true ->
                     timer:sleep(2),
                     insert_findSub(ReqRate, Id, From),
-                    found_sub(Id, lasp_support:mynode(), lasp_support:mynode());
+                    found_sub(Id, lasp_support:mynode(), lasp_support:mynode(), 0);
                 false -> check_sub_exists(From, ReqRate, Id)
             end,
             case ets:member(find_sub_aq, Id) of
@@ -437,7 +437,7 @@ handle_cast({rate_class, From, Rate}, #state{store=Store}=State) ->
           case ets:member(find_sub, Rate) of
               true ->
                   lists:foreach(fun(Id) ->
-                      found_sub(Id, From, lasp_support:mynode())
+                      found_sub(Id, From, lasp_support:mynode(), 1)
                     end,
                 ets:lookup_element(find_sub, Rate, 2));
               false ->
@@ -889,13 +889,13 @@ check_sub_exists(From, ReqRate, Id) ->
                 lager:debug("LASPVIN find_sub:insert ReqRate:~p Id:~p From:~p ~n", [ReqRate, Id, From]),
                 %%%ERROR HERE
                 lager:error("LASPVINDEBUG Informing ~p that found peer for ID:~ toNode: ~p Via: ~p ~n", [lists:nth(1,ets:lookup_element(find_sub, ReqRate, 3)), lists:nth(1, ets:lookup_element(find_sub, ReqRate, 2)), string:substr(Id, 1, string:len(Id)-2), From]),
-                found_sub(lists:nth(1, ets:lookup_element(find_sub, ReqRate, 2)), string:substr(Id, 1, string:len(Id)-2), From),
+                found_sub(lists:nth(1, ets:lookup_element(find_sub, ReqRate, 2)), string:substr(Id, 1, string:len(Id)-2), From, 5),
                 ets:insert(match_sub_aq, [{Id, lists:nth(1, ets:lookup_element(find_sub, ReqRate, 2))}]),
                 ets:insert(match_sub_aq, [{lists:nth(1, ets:lookup_element(find_sub, ReqRate, 2)), Id}]),
                 insert_findSub(ReqRate, Id, From),
                 lager:error("LASPVINDEBUG Added match_sub_aq ~p ~n", [ets:tab2list(match_sub_aq)]),
                 lager:error("LASPVIN Informing ~p that found peer for ID:~ toNode: ~p Via:~p ~n", [From, Id, erlang:list_to_atom(string:sub_string(lists:nth(1,ets:lookup_element(find_sub, ReqRate, 2)), 1, string:len(lists:nth(1, ets:lookup_element(find_sub, ReqRate, 2)))-2)), lists:nth(1,ets:lookup_element(find_sub, "c1", 3))]),
-                found_sub(Id, erlang:list_to_atom(string:sub_string(lists:nth(1,ets:lookup_element(find_sub, ReqRate, 2)), 1, string:len(lists:nth(1, ets:lookup_element(find_sub, ReqRate, 2)))-2)), lists:nth(1,ets:lookup_element(find_sub, "c1", 3)))
+                found_sub(Id, erlang:list_to_atom(string:sub_string(lists:nth(1,ets:lookup_element(find_sub, ReqRate, 2)), 1, string:len(lists:nth(1, ets:lookup_element(find_sub, ReqRate, 2)))-2)), lists:nth(1,ets:lookup_element(find_sub, "c1", 3)), 5)
           end;
        false ->
           insert_findSub(ReqRate, Id, From),
@@ -912,13 +912,13 @@ check_sub_exists(From, ReqRate, Id) ->
                                true -> 
                                    lager:debug("LASPVIN I found the peer ~n"),
                                    case lists:nth(1, ets:lookup_element(c1, "peer", 2)) == From of
-                                       true -> found_sub(Id, lists:nth(2, ets:lookup_element(c1, "peer", 2)), lasp_support:mynode());
-                                       false -> found_sub(Id, lists:nth(1, ets:lookup_element(c1, "peer", 2)), lasp_support:mynode())
+                                       true -> found_sub(Id, lists:nth(2, ets:lookup_element(c1, "peer", 2)), lasp_support:mynode(), 1);
+                                       false -> found_sub(Id, lists:nth(1, ets:lookup_element(c1, "peer", 2)), lasp_support:mynode(), 1)
                                     end;
                                false -> lager:debug("LASPVIN forward request to peers"), forward_sub_req(Id)
                             end;
                          false ->
-                             found_sub(Id, lists:nth(1, ets:lookup_element(c1, "peer", 2)), lasp_support:mynode())
+                             found_sub(Id, lists:nth(1, ets:lookup_element(c1, "peer", 2)), lasp_support:mynode(), 1)
                       end;
                    false -> lager:debug("LASPVIN send to peers"), forward_sub_req(Id)
                 end;
@@ -930,18 +930,18 @@ check_sub_exists(From, ReqRate, Id) ->
                             case length(ets:lookup_element(c2, "peer", 2)) > 1 of
                                true ->
                                    case lists:nth(1, ets:lookup_element(c2, "peer", 2)) == From of
-                                       true -> found_sub(Id, lists:nth(2, ets:lookup_element(c2, "peer", 2)), lasp_support:mynode());
-                                       false -> found_sub(Id, lists:nth(1, ets:lookup_element(c1, "peer", 2)), lasp_support:mynode())
+                                       true -> found_sub(Id, lists:nth(2, ets:lookup_element(c2, "peer", 2)), lasp_support:mynode(), 1);
+                                       false -> found_sub(Id, lists:nth(1, ets:lookup_element(c1, "peer", 2)), lasp_support:mynode(), 1)
                                     end;
                                false -> lager:debug("LASPVIN forward request to peers ~n"), forward_sub_req(Id)
                             end;
                          false ->
-                             found_sub(Id, lists:nth(1, ets:lookup_element(c2, "peer", 2)), lasp_support:mynode())
+                             found_sub(Id, lists:nth(1, ets:lookup_element(c2, "peer", 2)), lasp_support:mynode(), 1)
                       end;
                    false -> 
                       case ets:member(c1, "peer") of
                          true -> 
-                             found_sub(Id, lists:nth(1, ets:lookup_element(c1, "peer", 2)), lasp_support:mynode());
+                             found_sub(Id, lists:nth(1, ets:lookup_element(c1, "peer", 2)), lasp_support:mynode(), 1);
                          false -> lager:debug("LASPVIN send to peers"), forward_sub_req(Id)
                       end
                 end
@@ -959,7 +959,7 @@ forward_find_sub_on_join(From) ->
                   lists:usort(ets:match(find_sub, {'$1', '_', '_'}))).
 
 %%private
-found_sub(Id, ToNode, Via) ->
+found_sub(Id, ToNode, Via, Hop) ->
     case erlang:list_to_atom(string:substr(Id, 1, string:len(Id)-2)) == ToNode of
         true -> lager:debug("LASPVIN False call");
         false ->
@@ -972,8 +972,8 @@ found_sub(Id, ToNode, Via) ->
                         true -> 
                             found_sub_aq_lockpath(Id, ToNode, Via, lasp_support:mynode(), 0);
                         false -> 
-                            ets:insert(find_sub_aq, [{Id, ToNode, lasp_support:mynode(), 1}]),
-                            ?SYNC_BACKEND:send(?MODULE, {find_sub_aq, Id, ToNode, Via, lasp_support:mynode(), 1}, lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1'}))))
+                            ets:insert(find_sub_aq, [{Id, ToNode, lasp_support:mynode(), Hop}]),
+                            ?SYNC_BACKEND:send(?MODULE, {find_sub_aq, Id, ToNode, Via, lasp_support:mynode(), Hop}, lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1'}))))
                     end
             end
     end.
@@ -1009,7 +1009,7 @@ found_sub_aq_lockpath(Id, ToNode, Via, From, Hop) ->
                                                     lager:error("LASPVIN Check if Via ~p in peer_rates: ~p", [Via, ets:tab2list(peer_rates)]),
                                                     lager:error("LASPVIN Connections: ~p", [get_connections()]),
                                                     ets:insert(c1, [{"pseudopeer", ToNode, Hop}]),
-                                                    lager:error("Sending Lock for Id ~p to ~p ~n", [Id, Via]),
+                                                    lager:error("Sending Lock for Id ~p to ~p ~n", [Id, From]),
                                                     ?SYNC_BACKEND:send(?MODULE, {find_sub_aq_lock, Id, ToNode, lasp_support:mynode()}, From)
                                             end
                                     end
