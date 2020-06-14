@@ -889,13 +889,13 @@ check_sub_exists(From, ReqRate, Id) ->
                 lager:debug("LASPVIN find_sub:insert ReqRate:~p Id:~p From:~p ~n", [ReqRate, Id, From]),
                 %%%ERROR HERE
                 lager:error("LASPVINDEBUG Informing ~p that found peer for ID:~ toNode: ~p Via: ~p ~n", [lists:nth(1,ets:lookup_element(find_sub, ReqRate, 3)), lists:nth(1, ets:lookup_element(find_sub, ReqRate, 2)), string:substr(Id, 1, string:len(Id)-2), From]),
-                found_sub(lists:nth(1, ets:lookup_element(find_sub, ReqRate, 2)), string:substr(Id, 1, string:len(Id)-2), From, 5),
+                found_sub(lists:nth(1, ets:lookup_element(find_sub, ReqRate, 2)), erlang:list_to_atom(string:substr(Id, 1, string:len(Id)-2)), From, 500),
                 ets:insert(match_sub_aq, [{Id, lists:nth(1, ets:lookup_element(find_sub, ReqRate, 2))}]),
                 ets:insert(match_sub_aq, [{lists:nth(1, ets:lookup_element(find_sub, ReqRate, 2)), Id}]),
                 insert_findSub(ReqRate, Id, From),
                 lager:error("LASPVINDEBUG Added match_sub_aq ~p ~n", [ets:tab2list(match_sub_aq)]),
                 lager:error("LASPVIN Informing ~p that found peer for ID:~ toNode: ~p Via:~p ~n", [From, Id, erlang:list_to_atom(string:sub_string(lists:nth(1,ets:lookup_element(find_sub, ReqRate, 2)), 1, string:len(lists:nth(1, ets:lookup_element(find_sub, ReqRate, 2)))-2)), lists:nth(1,ets:lookup_element(find_sub, "c1", 3))]),
-                found_sub(Id, erlang:list_to_atom(string:sub_string(lists:nth(1,ets:lookup_element(find_sub, ReqRate, 2)), 1, string:len(lists:nth(1, ets:lookup_element(find_sub, ReqRate, 2)))-2)), lists:nth(1,ets:lookup_element(find_sub, "c1", 3)), 5)
+                found_sub(Id, erlang:list_to_atom(string:sub_string(lists:nth(1,ets:lookup_element(find_sub, ReqRate, 2)), 1, string:len(lists:nth(1, ets:lookup_element(find_sub, ReqRate, 2)))-2)), lists:nth(1,ets:lookup_element(find_sub, "c1", 3)), 500)
           end;
        false ->
           insert_findSub(ReqRate, Id, From),
@@ -998,6 +998,7 @@ found_sub_aq_lockpath(Id, ToNode, Via, From, Hop) ->
                                     case lists:member(Via, get_connections()) of
                                         true -> lager:error("Via is in connections ~p ... Skipping...", [get_connections()]);
                                         false ->
+                                             lager:error("Find_sub_aq ToNodes before checking if ToNode ~p exists : ~p", [ToNode, ets:match(find_sub_aq, {'_', '$1', '_', '_'})]),
                                              case lists:member([ToNode], ets:match(find_sub_aq, {'_', '$1', '_', '_'})) of
                                                 true ->
                                                     lager:error("LASPVIN path ToNode: ~p exists in find_sub_aq: ~p ~n",[ToNode, ets:match_object(find_sub_aq, {'_', '$1', '_', '_'})]);
@@ -1009,7 +1010,7 @@ found_sub_aq_lockpath(Id, ToNode, Via, From, Hop) ->
                                                     lager:error("LASPVIN Check if Via ~p in peer_rates: ~p", [Via, ets:tab2list(peer_rates)]),
                                                     lager:error("LASPVIN Connections: ~p", [get_connections()]),
                                                     ets:insert(c1, [{"pseudopeer", ToNode, Hop}]),
-                                                    lager:error("Sending Lock for Id ~p to ~p ~n", [Id, From]),
+                                                    lager:error("Sending Lock for Id ~p, ToNode:~p to ~p ~n", [Id, ToNode, From]),
                                                     ?SYNC_BACKEND:send(?MODULE, {find_sub_aq_lock, Id, ToNode, lasp_support:mynode()}, From)
                                             end
                                     end
