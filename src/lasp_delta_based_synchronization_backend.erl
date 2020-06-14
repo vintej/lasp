@@ -263,11 +263,12 @@ handle_cast({find_sub_aq, Id, ToNode, Via, From, Hop}, #state{store=Store}=State
                                     case lists:member([ToNode], ets:match(find_sub_aq, {'_', '$1', '_', '_'})) of
                                         true -> 
                                             lager:error("LASPVIN path ToNode: ~p exists ~n",[ToNode]),
-                                            case Hop < ets:match(find_sub_aq, {Id, ToNode, '_', '$1'}) of
+                                            case Hop < lists:nth(1,lists:nth(1,ets:match(find_sub_aq, {Id, ToNode, '_', '$1'}))) of
                                                 true ->
                                                     lager:error("Got new path for a peer with lower hopcount ~p ToNode ~p  From ~p for Id ~p Via ~p, can discard this... ~n", [Hop, ToNode, From, Id, Via]),
                                                     lager:error("Lower hopcount connection status ~p ~n", [get_connections()]),
                                                     lager:error("Lower hopcount members status ~p ~n", [get_peers()]);
+                                                    %found_sub_aq_lockpath(Id, ToNode, Via, From, Hop);
                                                     %lockpath_unlock(Id),
                                                     %ets:delete(find_sub_aq, lists:nth(1,ets:match_object(find_sub_aq, {Id,'_', '_', '_' }))),
                                                     %found_sub_aq_lockpath(Id, ToNode, Via, From, Hop);
@@ -292,11 +293,12 @@ handle_cast({find_sub_aq, Id, ToNode, Via, From, Hop}, #state{store=Store}=State
                             case lists:member([ToNode], ets:match(find_sub_aq, {'_', '$1', '_', '_'})) of
                                 true -> 
                                     lager:error("LASPVIN path ToNode: ~p exists ~n",[ToNode]),
-                                    case Hop < ets:match(find_sub_aq, {Id, ToNode, '_', '$1'}) of
+                                    case Hop < lists:nth(1,lists:nth(1, ets:match(find_sub_aq, {Id, ToNode, '_', '$1'}))) of
                                         true ->
                                             lager:error("Got new path with lower hopcount ~p ToNode ~p  From ~p for Id ~p Via ~p ~n", [Hop, ToNode, From, Id, Via]),
                                             lager:error("Lower hopcount connection status ~p ~n", [get_connections()]),
-                                            lager:error("Lower hopcount members status ~p ~n", [get_peers()]);
+                                            lager:error("Lower hopcount members status ~p ~n", [get_peers()]),
+                                            found_sub_aq_lockpath(Id, ToNode, Via, From, Hop);
                                             %lockpath_unlock(Id),
                                             %ets:delete(find_sub_aq, lists:nth(1,ets:match_object(find_sub_aq, {Id,'_', '_', '_' }))),
                                             %found_sub_aq_lockpath(Id, ToNode, Via, From, Hop);
@@ -1003,7 +1005,7 @@ found_sub_aq_lockpath(Id, ToNode, Via, From, Hop) ->
                                                 true ->
                                                     lager:error("LASPVIN path ToNode: ~p exists in find_sub_aq: ~p ~n",[ToNode, ets:match_object(find_sub_aq, {'_', '$1', '_', '_'})]);
                                                 false ->
-                                                    lager:error("Path ToNode:~p does not exists in find_sub_aq:~p", ets:tab2list(find_sub_aq)),
+                                                    lager:error("Path ToNode:~p does not exists in find_sub_aq:~p", [ToNode, ets:tab2list(find_sub_aq)]),
                                                     lager:error("Sending aq_lock to From ~p For Via ~p for Id:~p ToNode:~p HopCount ~p and I am the source ~n", [From, Via, Id, ToNode, Hop]),
                                                     ets:insert(find_sub_aq, [{Id, ToNode, Via, Hop}]),
                                                     lager:error("LASPVIN Got path to ~p ID:~p From:~p Via:~p HopCount:~p ~n", [ToNode, Id, Via, Via, Hop]),
