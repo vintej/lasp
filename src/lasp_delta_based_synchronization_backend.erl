@@ -860,9 +860,9 @@ check_subscription() ->
                       case ets:member(find_sub, ets:lookup_element(peer_rates, "self_rate", 2)) of
                          true -> lager:debug("Find_sub_req exists for the class");
                          false -> 
-                            insert_findSub("c1", erlang:atom_to_list(lasp_support:mynode())++"c1", lasp_support:mynode(), -1),
+                            insert_findSub("c1", erlang:atom_to_list(lasp_support:mynode())++"c1", lasp_support:mynode(), 0),
                             lager:error("Requesting c1 sub ~n"),
-                            forward_sub_req(erlang:atom_to_list(lasp_support:mynode())++"c1", -1)
+                            forward_sub_req(erlang:atom_to_list(lasp_support:mynode())++"c1", 0)
                       end
                 end
           end
@@ -871,15 +871,18 @@ check_subscription() ->
 %%private
 forward_sub_req(Id, Hop) ->
    lager:debug("LASPVIN no c1 peer to subscribe forwarding to peers ~n"),
-   lager:error("Forwarding Req Id ~p to Peers ~n", [Id]),
+   lager:error("Forwarding Req Id ~p to Peers RcvHop:~p IncHop:~p ~n", [Id, Hop, Hop+1]),
    timer:sleep(2),
+   NewHop = Hop+1,
    lists:foreach(fun(Peer) ->
       case lists:member(Peer, ets:lookup_element(find_sub, "c1", 3)) of
          true -> ok;
          false ->
              case erlang:list_to_atom(string:substr(Id, 1, string:len(Id)-2)) == Peer of
                true -> lager:debug("LASPVIN Peer ~p is Source of Req.. Skipping ~n",[Peer]);
-               false -> ?SYNC_BACKEND:send(?MODULE, {find_sub, lasp_support:mynode(),"c1", Id, Hop+1}, Peer)
+               false ->
+                   lager:error("Forwarding ReqId ~p to Peer:~p Hop:~p ~n", [Id, Peer, NewHop]),
+                   ?SYNC_BACKEND:send(?MODULE, {find_sub, lasp_support:mynode(),"c1", Id, NewHop}, Peer)
             end
       end
    end,
@@ -887,6 +890,7 @@ forward_sub_req(Id, Hop) ->
 
 %% @private
 check_sub_exists(From, ReqRate, Id, Hop) ->
+    lager:error("Checking sub_exists for Id:~p From:~p Hop:~p ~n", [Id, From, Hop]),
     timer:sleep(2),
     case ets:member(find_sub, ReqRate) of
        true ->
