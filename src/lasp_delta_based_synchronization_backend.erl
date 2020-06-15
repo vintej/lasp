@@ -622,7 +622,9 @@ handle_info(node_c1, #state{store=Store}=State) ->
 handle_info(rate_prop_c1, #state{store=Store}=State) ->
     lager:debug("LASPVIN Store: ~p State:~p ~n", [Store, State]),
     case ets:member(c1, "peer") of
-        true -> propagate_by_class(c1, "peer"), propagate_by_class(c1, "subscriber");
+        true -> 
+            propagate_by_class(c1, "peer");
+            %propagate_by_class(c1, "subscriber");
         false -> lager:debug("LASPVIN no c1 peers for propagation")
     end,
     schedule_rate_propagation_c1(),
