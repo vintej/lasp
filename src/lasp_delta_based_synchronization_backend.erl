@@ -401,7 +401,11 @@ handle_cast({find_sub, From, ReqRate, Id, Hop}, #state{store=Store}=State) ->
             case ets:member(find_sub_aq, Id) of
                 true ->
                     case ReqRate of
-                        "c1" -> forward_sub_req(Id, Hop);
+                        "c1" ->
+                            case ets:member(match_sub_aq, Id) of
+                                true -> ok;
+                                false -> forward_sub_req(Id, Hop)
+                            end;
                         "c2" -> lager:debug("LASPVIN Skip forwarding for class c2")
                     end;
                 false -> lager:error("LASPVIN Request forwarded~n")
