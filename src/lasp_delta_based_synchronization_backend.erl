@@ -1032,8 +1032,22 @@ found_sub_aq_lockpath(Id, ToNode, Via, From, Hop) ->
                                                 true ->
                                                     lager:error("LASPVIN path ToNode: ~p exists in find_sub_aq: ~p ~n",[ToNode, ets:match_object(find_sub_aq, {'_', '$1', '_', '_'})]);
                                                 false ->
-                                                    case lists:member(ToNode, ets:lookup_element(c1, "pseudopeer", 2)) of
-                                                        true -> lager:errror("ToNode ~p exists in c1 pseudopeer ~p ~n", [ToNode, ets:lookup_element(c1, "pseudopeer", 2)]);
+                                                    case ets:member(c1, "pseudopeer") of
+                                                        true ->
+                                                            case lists:member(ToNode, ets:lookup_element(c1, "pseudopeer", 2)) of
+                                                                true -> lager:errror("ToNode ~p exists in c1 pseudopeer ~p ~n", [ToNode, ets:lookup_element(c1, "pseudopeer", 2)]);
+                                                                false ->
+                                                                    lager:error("ToNode ~p is not a pseudopeer ~p ~n", [ToNode, ets:lookup_element(c1, "pseudopeer", 2)]),
+                                                                    lager:error("Path ToNode:~p does not exists in find_sub_aq:~p", [ToNode, ets:tab2list(find_sub_aq)]),
+                                                                    lager:error("Sending aq_lock to From ~p For Via ~p for Id:~p ToNode:~p HopCount ~p and I am the source ~n", [From, Via, Id, ToNode, Hop]),
+                                                                    ets:insert(find_sub_aq, [{Id, ToNode, Via, Hop}]),
+                                                                    lager:error("LASPVIN Got path to ~p ID:~p From:~p Via:~p HopCount:~p ~n", [ToNode, Id, Via, Via, Hop]),
+                                                                    lager:error("LASPVIN Check if Via ~p in peer_rates: ~p", [Via, ets:tab2list(peer_rates)]),
+                                                                    lager:error("LASPVIN Connections: ~p", [get_connections()]),
+                                                                    ets:insert(c1, [{"pseudopeer", ToNode, Hop}]),
+                                                                    lager:error("Sending Lock for Id ~p, ToNode:~p to ~p ~n", [Id, ToNode, From]),
+                                                                    ?SYNC_BACKEND:send(?MODULE, {find_sub_aq_lock, Id, ToNode, lasp_support:mynode()}, From)
+                                                            end;
                                                         false ->
                                                             lager:error("ToNode ~p is not a pseudopeer ~p ~n", [ToNode, ets:lookup_element(c1, "pseudopeer", 2)]),
                                                             lager:error("Path ToNode:~p does not exists in find_sub_aq:~p", [ToNode, ets:tab2list(find_sub_aq)]),
@@ -1046,7 +1060,7 @@ found_sub_aq_lockpath(Id, ToNode, Via, From, Hop) ->
                                                             lager:error("Sending Lock for Id ~p, ToNode:~p to ~p ~n", [Id, ToNode, From]),
                                                             ?SYNC_BACKEND:send(?MODULE, {find_sub_aq_lock, Id, ToNode, lasp_support:mynode()}, From)
                                                     end
-                                            end
+                                             end
                                     end
                             end;
                         false ->
