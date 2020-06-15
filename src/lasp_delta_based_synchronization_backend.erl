@@ -1049,7 +1049,6 @@ found_sub_aq_lockpath(Id, ToNode, Via, From, Hop) ->
                                                                     ?SYNC_BACKEND:send(?MODULE, {find_sub_aq_lock, Id, ToNode, lasp_support:mynode()}, From)
                                                             end;
                                                         false ->
-                                                            lager:error("ToNode ~p is not a pseudopeer ~p ~n", [ToNode, ets:lookup_element(c1, "pseudopeer", 2)]),
                                                             lager:error("Path ToNode:~p does not exists in find_sub_aq:~p", [ToNode, ets:tab2list(find_sub_aq)]),
                                                             lager:error("Sending aq_lock to From ~p For Via ~p for Id:~p ToNode:~p HopCount ~p and I am the source ~n", [From, Via, Id, ToNode, Hop]),
                                                             ets:insert(find_sub_aq, [{Id, ToNode, Via, Hop}]),
