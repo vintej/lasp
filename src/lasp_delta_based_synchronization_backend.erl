@@ -1035,7 +1035,7 @@ found_sub_aq_lockpath(Id, ToNode, Via, From, Hop) ->
                                                     case ets:member(c1, "pseudopeer") of
                                                         true ->
                                                             case lists:member(ToNode, ets:lookup_element(c1, "pseudopeer", 2)) of
-                                                                true -> lager:errror("ToNode ~p exists in c1 pseudopeer ~p ~n", [ToNode, ets:lookup_element(c1, "pseudopeer", 2)]);
+                                                                true -> lager:error("ToNode ~p exists in c1 pseudopeer ~p ~n", [ToNode, ets:lookup_element(c1, "pseudopeer", 2)]);
                                                                 false ->
                                                                     lager:error("ToNode ~p is not a pseudopeer ~p ~n", [ToNode, ets:lookup_element(c1, "pseudopeer", 2)]),
                                                                     lager:error("Path ToNode:~p does not exists in find_sub_aq:~p", [ToNode, ets:tab2list(find_sub_aq)]),
