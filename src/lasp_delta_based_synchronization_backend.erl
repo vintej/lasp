@@ -905,7 +905,7 @@ check_sub_exists(From, ReqRate, Id, Hop) ->
                 lager:error("LASPVINDEBUG Matching find_sub rates found~n"),
                 lager:debug("LASPVIN find_sub:insert ReqRate:~p Id:~p From:~p ~n", [ReqRate, Id, From]),
                 %%%ERROR HERE
-                lager:error("LASPVINDEBUG Informing ~p that found peer for ID:~ toNode: ~p Via: ~p HopCount:~p+1 ~n", [lists:nth(1,ets:lookup_element(find_sub, ReqRate, 3)), lists:nth(1, ets:lookup_element(find_sub, ReqRate, 2)), string:substr(Id, 1, string:len(Id)-2), From, Hop]),
+                lager:error("LASPVINDEBUG Informing ~p that found peer for ID:~ toNode: ~p Via: ~p HopCount: ~p +1 ~n", [lists:nth(1,ets:lookup_element(find_sub, ReqRate, 3)), lists:nth(1, ets:lookup_element(find_sub, ReqRate, 2)), string:substr(Id, 1, string:len(Id)-2), From, Hop]),
                 found_sub(lists:nth(1, ets:lookup_element(find_sub, ReqRate, 2)), erlang:list_to_atom(string:substr(Id, 1, string:len(Id)-2)), From, Hop+1),
                 ets:insert(match_sub_aq, [{Id, lists:nth(1, ets:lookup_element(find_sub, ReqRate, 2))}]),
                 ets:insert(match_sub_aq, [{lists:nth(1, ets:lookup_element(find_sub, ReqRate, 2)), Id}]),
@@ -967,10 +967,11 @@ check_sub_exists(From, ReqRate, Id, Hop) ->
 
 %%private
 forward_find_sub_on_join(From) ->
+    lager:error("Forwarding find_sub:~p to ~p on join ~n", [ets:tab2list(find_sub), From]),
     lists:foreach(fun(ReqRate) ->
                           case From == lists:nth(1,ets:lookup_element(find_sub, lists:nth(1,ReqRate), 3)) of
                              true -> ok;
-                             false ->lager:debug("LASPVIN sent find_sub req ~n"), ?SYNC_BACKEND:send(?MODULE, {find_sub, lasp_support:mynode(), lists:nth(1,ReqRate), lists:nth(1,ets:lookup_element(find_sub, lists:nth(1,ReqRate), 2)), lists:nth(1,ets:lookup_element(find_sub, lists:nth(1, ReqRate), 4))}, From)
+                             false ->lager:error("LASPVIN sent find_sub on join req Id:~p, Hop:~p ~n", [ lists:nth(1,ets:lookup_element(find_sub, lists:nth(1,ReqRate), 2)), (lists:nth(1,ets:lookup_element(find_sub, lists:nth(1, ReqRate), 4))+1)]), ?SYNC_BACKEND:send(?MODULE, {find_sub, lasp_support:mynode(), lists:nth(1,ReqRate), lists:nth(1,ets:lookup_element(find_sub, lists:nth(1,ReqRate), 2)), (lists:nth(1,ets:lookup_element(find_sub, lists:nth(1, ReqRate), 4))+1)}, From)
                           end
                         end,
                   lists:usort(ets:match(find_sub, {'$1', '_', '_', '_'}))).
