@@ -886,8 +886,12 @@ forward_sub_req(Id, Hop) ->
              case erlang:list_to_atom(string:substr(Id, 1, string:len(Id)-2)) == Peer of
                true -> lager:debug("LASPVIN Peer ~p is Source of Req.. Skipping ~n",[Peer]);
                false ->
-                   lager:error("Forwarding ReqId ~p to Peer:~p Hop:~p ~n", [Id, Peer, NewHop]),
-                   ?SYNC_BACKEND:send(?MODULE, {find_sub, lasp_support:mynode(),"c1", Id, NewHop}, Peer)
+                   case lists:member([Peer], lists:nth(1, ets:match(find_sub, {'_', Id, '$1', '_'}))) of
+                       true -> ok;
+                       false ->
+                           lager:error("Forwarding ReqId ~p to Peer:~p Hop:~p ~n", [Id, Peer, NewHop]),
+                           ?SYNC_BACKEND:send(?MODULE, {find_sub, lasp_support:mynode(),"c1", Id, NewHop}, Peer)
+                    end
             end
       end
    end,
