@@ -437,7 +437,7 @@ handle_cast({sub_cancel, From, Id, ToNode}, #state{store=Store}=State) ->
     lager:error("Received sub_cancel From:~p for Id:~p ~n", [From, Id]),
     case ets:member(c1, "subscriber") of
         true ->
-            case lists:member(From, ets:lookup_element(c1, "susbcriber", 2)) of
+            case lists:member(From, ets:lookup_element(c1, "subscriber", 2)) of
                 true-> 
                     case length(ets:lookup_element(c1, "subscriber", 2)) > 3 of
                         true ->
