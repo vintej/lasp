@@ -70,8 +70,8 @@ extract_log_type_and_payload({find_sub_aq_lock, Id, ToNode, Node}) ->
     [{delta_send_protocol, {Id, ToNode, Node}}];
 extract_log_type_and_payload({check_tonode, ToNode, Hop, Node}) ->
     [{delta_send_protocol, {ToNode, Hop, Node}}];
-extract_log_type_and_payload({sub_cancel, Node, Id}) ->
-    [{delta_send_protocol, {Node, Id}}];
+extract_log_type_and_payload({sub_cancel, Node, Id, ToNode}) ->
+    [{delta_send_protocol, {Node, Id, ToNode}}];
 extract_log_type_and_payload({find_sub_aq_lock_rev, Id, Node}) ->
     [{delta_send_protocol, {Id, Node}}].
 
@@ -431,7 +431,7 @@ handle_cast({check_tonode, ToNode, Hop, From}, #state{store=Store}=State) ->
     %TO BE DONE!!!!
     {noreply, State};
 
-handle_cast({sub_cancel, From, Id}, #state{store=Store}=State) ->
+handle_cast({sub_cancel, From, Id, ToNode}, #state{store=Store}=State) ->
     lasp_marathon_simulations:log_message_queue_size("rate_ack"),
     lager:debug("LASPVIN received node_cancel from ~p Store ~p ~n", [From, Store]),
     lager:error("Received sub_cancel From:~p for Id:~p ~n", [From, Id]),
@@ -439,20 +439,24 @@ handle_cast({sub_cancel, From, Id}, #state{store=Store}=State) ->
         true ->
             case lists:member(From, ets:lookup_element(c1, "susbcriber", 2)) of
                 true-> 
-                    case length(ets:lookup_element(c1, "subscriber", 2)) > 1 of
-                        true -> lager:error("sub_cancel not changing self_rate as more than 1 c1 subscrier ~p ~n", ets:tab2list(c1));
+                    case length(ets:lookup_element(c1, "subscriber", 2)) > 3 of
+                        true ->
+                            lager:error("sub_cancel but more than 3 c1 subscrier ~p ~n", ets:tab2list(c1));
                         false ->
-                            case ets:member(find_sub_aq, Id) of
-                                true -> lager:error("sub_cancel have to forward rate to ~p ~n", ets:lookup_element(find_sub_aq, Id, 3));
-                                false -> lager:error("sub_cancel Id ~p not in sub_aq ~p", [Id, ets:tab2list(find_sub_aq)])
-                            end,
                             ets:update_element(peer_rates, "self_rate", {2, os:getenv("RATE_CLASS", "c1")}),
                             lager:error("Resetted self_rate ~p and deleting rate_ack ~n", [ets:tab2list(peer_rates)]),
-                            ets:delete_all_objects(rate_ack)
+                            ets:delete_all_objects(rate_ack),
+                            case ets:match(find_sub_aq, {Id, ToNode, '$1','_'}) == [[lasp_support:mynode()]] of
+                                    true -> 
+                                        lager:error("End of sub_cancel chain ~p");
+                                    false ->
+                                        [[ForwardCancelTo]] = ets:match(find_sub_aq, {Id, ToNode, '$1','_'}),
+                                        ?SYNC_BACKEND:send(?MODULE, {sub_cancel, lasp_support:mynode(), Id, ToNode}, ForwardCancelTo)
+                            end
                     end;
                 false -> lager:error("Sub_cancel From ~p is not a c1 subscriber ~p ~n", [From, ets:tab2list(c1)])
             end;
-        false -> lager:error("sub_cancel but not c1 subscriber ~p ~n", [ets:tab2list(c1)])
+        false -> lager:error("sub_cancel but no c1 subscriber ~p ~n", [ets:tab2list(c1)])
     end,
     %TO BE DONE!!!!
     {noreply, State};
@@ -790,28 +794,40 @@ peer_rate_update(From, NewRate, OldRate) ->
         "c3" -> ets:delete_object(c3, {"peer", From})
     end,
     peer_rate_insert(From, NewRate),
-    ets:update_element(peer_rates, From, {2, NewRate}),
-    timer:sleep(51000),
-    case ets:lookup_element(peer_rates, "self_rate", 2) == "c1" of
-        true ->
-            case ets:member(peer_rates, "subscription") of
-                true ->
-                    case ets:lookup_element(peer_rates, "subscription", 2) == From of
-                        true -> lager:error("New Rate is of the subscription ~p");
-                        false ->
-                            case lists:member([ets:lookup_element(peer_rates, "subscription", 2)], ets:match(find_sub_aq, {'_', '_', '$1', '_'})) of
-                                true ->
-                                    ?SYNC_BACKEND:send(?MODULE, {sub_cancel, lasp_support:mynode(), lists:flatten(ets:match(find_sub_aq, {'$1', '_', ets:lookup_element(peer_rates, "subscription", 2), '_'}))}, ets:lookup_element(peer_rates, "subscription", 2));
-                                false ->
-                                    ok
-                            end
-                    end;
-                false ->
-                    ok
-            end;
-        false ->
-            ok
-    end.
+    ets:update_element(peer_rates, From, {2, NewRate}).
+    %timer:sleep(5500),
+    %lager:error("Checking sub_cancel"),
+    %case ets:lookup_element(peer_rates, "self_rate", 2) == "c1" of
+    %    true ->
+    %        case ets:member(peer_rates, "subscription") of
+    %            true ->
+    %                case ets:lookup_element(peer_rates, "subscription", 2) == From of
+    %                    true -> lager:error("New Rate is of the subscription ~p");
+    %                    false ->
+    %                        case lists:member([ets:lookup_element(peer_rates, "subscription", 2)], ets:match(find_sub_aq, {'_', '_', '$1', '_'})) of
+    %                            true ->
+    %                                case NewRate == "c1" of
+    %                                    true ->
+    %                                        lager:error("Sending sub_cancel to ~p ~n", [ets:lookup_element(peer_rates, "subscription", 2)]),
+    %                                        IdCancel = 
+    %                                        ?SYNC_BACKEND:send(?MODULE, {sub_cancel, lasp_support:mynode(), lists:flatten(ets:match(find_sub_aq, {'$1', '_', ets:lookup_element(peer_rates, "subscription", 2), '_'}))}, ets:lookup_element(peer_rates, "subscription", 2)),
+    %                                        ets:delete(peer_rates, "subscription"),
+    %                                        ets:insert(peer_rates, [{"subscription", From}]),
+    %                                        ?SYNC_BACKEND:send(?MODULE, {rate_subscribe, lasp_support:mynode(), ets:lookup_element(peer_rates, "self_rate", 2)}, From),
+    %                                        lager:error("Subscribed to ~p  and sending sub_cancel to ~p ~n", [From]);
+    %                                   false ->
+    %                                       ok
+    %                               end;
+    %                           false ->
+    %                               ok
+    %                       end
+    %               end;
+    %           false ->
+    %               ok
+    %       end;
+    %   false ->
+    %       ok
+    %end.
 
 %% @private
 schedule_delta_garbage_collection() ->
@@ -970,7 +986,11 @@ check_sub_exists(From, ReqRate, Id, Hop) ->
              true -> 
                  lager:debug("LASPVIN Find_sub request id ~p exists ~n", [Id]),
                  case Hop < lists:nth(1,lists:nth(1,ets:match(find_sub, {'_', Id, '_', '$1'}))) of
-                    true -> lager:error("Find_sub request id ~p exists but Rcv hopcount ~p is lower than existing ~p ~n", [Id, Hop, lists:nth(1,lists:nth(1,ets:match(find_sub, {'_', Id, '_', '$1'})))]);
+                    true -> 
+                        lager:error("Find_sub request id ~p exists but Rcv hopcount ~p is lower than existing ~p ~n", [Id, Hop, lists:nth(1,lists:nth(1,ets:match(find_sub, {'_', Id, '_', '$1'})))]),
+                        ets:delete_object(find_sub, {'_', Id, '_', '_'}),
+                        insert_findSub(ReqRate, Id, From, Hop),
+                        lager:error("Deleted rqeuest id, updated it with lower hopcount ~p ~n", [ets:tab2list(find_sub)]);
                     false -> ok
                 end;
              false -> 
@@ -1103,7 +1123,7 @@ found_sub_aq_lockpath(Id, ToNode, Via, From, Hop) ->
                                                         true ->
                                                             case ets:member(peer_rates, "subscription") of
                                                                 true -> 
-                                                                    lager:error("Checking if subscription ~p has path ToNode ~p as got lower hop count and potential lock ~n", [ets:lookup_element(peer_rates, "subscription", 2)]),
+                                                                    lager:error("Got lower path canceChecking if subscription ~p has path ToNode ~p as got lower hop count and potential lock ~n", [ets:lookup_element(peer_rates, "subscription", 2)]),
                                                                     ets:insert(temp_tonode, [{Id, ToNode, Via, Hop}]),
                                                                     ?SYNC_BACKEND:send(?MODULE, {check_tonode, ToNode, Hop, lasp_support:mynode()}, ets:lookup_element(peer_rates, "subscription", 2));
                                                                 false ->
@@ -1158,7 +1178,28 @@ found_sub_aq_lockpath(Id, ToNode, Via, From, Hop) ->
                                              lager:error("Find_sub_aq ToNodes before checking if ToNode ~p exists : ~p", [ToNode, ets:match(find_sub_aq, {'_', '$1', '_', '_'})]),
                                              case lists:member([ToNode], ets:match(find_sub_aq, {'_', '$1', '_', '_'})) of
                                                 true ->
-                                                    lager:error("LASPVIN path ToNode: ~p exists in find_sub_aq: ~p ~n",[ToNode, ets:match_object(find_sub_aq, {'_', '$1', '_', '_'})]);
+                                                    lager:error("LASPVIN path ToNode: ~p exists in find_sub_aq: ~p ~n",[ToNode, ets:match_object(find_sub_aq, {'_', '$1', '_', '_'})]),
+                                                    case Hop < lists:nth(1,lists:nth(1,ets:match(find_sub_aq, {'_', ToNode, '_', '$1'}))) of
+                                                        true ->
+                                                            lager:error("Got lower hop checking subscription: ~p", ets:tab2list(peer_rates)),
+                                                            case ets:member(peer_rates, "subscription") of
+                                                                true ->
+                                                                    lager:error("Lower hop subscription exists"),
+                                                                    case lists:member([ets:lookup_element(peer_rates, "subscription", 2)], ets:match(find_sub_aq, {'_', ToNode, '$1', '_'})) of
+                                                                        true ->
+                                                                            % Cancel subscription and send lock for new
+                                                                            lager:error("Lower hop Subscription is locked for this ToNode ~p sending cancel ~n", [ToNode]),
+                                                                            ?SYNC_BACKEND:send(?MODULE, {sub_cancel, lasp_support:mynode(), Id, ToNode}, ets:lookup_element(peer_rates, "subscription", 2)),
+                                                                            lager:error("Lower hop Deleted Subscription"),
+                                                                            ets:delete(peer_rates, "subscription"),
+                                                                            send_lock(Id, ToNode, Via, Hop, From);
+                                                                        false ->
+                                                                            send_lock(Id, ToNode, Via, Hop, From)
+                                                                    end;
+                                                                false -> send_lock(Id, ToNode, Via, Hop, From)
+                                                            end;
+                                                        false -> lager:error("RcvHop ~p > Existing Hop ~p for ToNode~p ~n", [Hop, lists:nth(1,lists:nth(1,ets:match(find_sub_aq, {'_', ToNode, '_', '$1'}))), ToNode])
+                                                    end;
                                                 false ->
                                                     case ets:member(c1, "pseudopeer") of
                                                         true ->
@@ -1254,7 +1295,7 @@ forward_aq_lock_rev(Id) ->
 %%private
 send_lock(Id, ToNode, Via, Hop, From) ->
     lager:error("Sending aq_lock to From ~p For Via ~p for Id:~p ToNode:~p HopCount ~p and I am the source ~n", [From, Via, Id, ToNode, Hop]),
-    ets:insert(find_sub_aq, [{Id, ToNode, Via, Hop}]),
+    ets:insert(find_sub_aq, [{Id, ToNode, From, Hop}]),
     lager:error("LASPVIN Got path to ~p ID:~p From:~p Via:~p HopCount:~p ~n", [ToNode, Id, Via, Via, Hop]),
     lager:error("LASPVIN Check if Via ~p in peer_rates: ~p", [Via, ets:tab2list(peer_rates)]),
     lager:error("LASPVIN Connections: ~p", [get_connections()]),
