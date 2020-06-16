@@ -1280,9 +1280,13 @@ found_sub_aq_lockpath(Id, ToNode, Via, From, Hop) ->
                             case Via == lasp_support:mynode() of
                                 true -> lager:error("Via is from self... Skipping Id:~p From:~p Hop:~p", [Id, From, Hop]);
                                 false ->
-                                    ets:insert(find_sub_aq, [{Id, ToNode, From, Hop}]),
-                                    lager:error("LASPVINDEBUG Forwarding find_sub_aq for Id: ~p ToNode:~p From:~p to ~p HopCount:~p ~n", [Id, ToNode, From, lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1', '_'}))), Hop+1]), 
-                                    ?SYNC_BACKEND:send(?MODULE, {find_sub_aq, Id, ToNode, From, lasp_support:mynode(), Hop+1}, lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1', '_'}))))
+                                    case lists:member(ToNode, get_connections()) of
+                                        true -> lager:error("ToNode ~p is a peer ~p.. Not forwarding req...", [ToNode, ets:tab2list(peer_rates)]);
+                                        false ->
+                                            ets:insert(find_sub_aq, [{Id, ToNode, From, Hop}]),
+                                            lager:error("LASPVINDEBUG Forwarding find_sub_aq for Id: ~p ToNode:~p From:~p to ~p HopCount:~p ~n", [Id, ToNode, From, lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1', '_'}))), Hop+1]), 
+                                            ?SYNC_BACKEND:send(?MODULE, {find_sub_aq, Id, ToNode, From, lasp_support:mynode(), Hop+1}, lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1', '_'}))))
+                                    end
                             end
                     end;
                 false ->
