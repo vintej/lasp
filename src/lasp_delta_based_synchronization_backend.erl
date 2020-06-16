@@ -1199,6 +1199,7 @@ found_sub_aq_lockpath(Id, ToNode, Via, From, Hop) ->
                                                     case Hop < lists:nth(1,lists:nth(1,ets:match(find_sub_aq, {'_', ToNode, '_', '$1'}))) of
                                                         true ->
                                                             lager:error("Got lower hop checking subscription: ~p", ets:tab2list(peer_rates)),
+                                                            timer:sleep(10000),
                                                             case ets:member(peer_rates, "subscription") of
                                                                 true ->
                                                                     lager:error("Lower hop subscription exists"),
@@ -1228,7 +1229,9 @@ found_sub_aq_lockpath(Id, ToNode, Via, From, Hop) ->
                                                                         false ->
                                                                             send_lock(Id, ToNode, Via, Hop, From)
                                                                     end;
-                                                                false -> send_lock(Id, ToNode, Via, Hop, From)
+                                                                false -> 
+                                                                    lager:error("Susbcription not found ~p sending lock lower hop ~n", ets:tab2list(peer_rates)),
+                                                                    send_lock(Id, ToNode, Via, Hop, From)
                                                             end;
                                                         false -> lager:error("RcvHop ~p > Existing Hop ~p for ToNode~p ~n", [Hop, lists:nth(1,lists:nth(1,ets:match(find_sub_aq, {'_', ToNode, '_', '$1'}))), ToNode])
                                                     end;
