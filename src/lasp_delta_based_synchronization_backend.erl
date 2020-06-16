@@ -1010,7 +1010,7 @@ check_sub_exists(From, ReqRate, Id, Hop) ->
                 lager:debug("LASPVIN find_sub:insert ReqRate:~p Id:~p From:~p ~n", [ReqRate, Id, From]),
                 %%%ERROR HERE
                 %lager:error("LASPVINDEBUG Informing ~p that found peer for ID:~ toNode: ~p Via: ~p HopCount: ~p +1 ~n", [lists:nth(1,ets:lookup_element(find_sub, ReqRate, 3)), lists:nth(1, ets:lookup_element(find_sub, ReqRate, 2)), string:substr(Id, 1, string:len(Id)-2), From, Hop]),
-                %To be implemented found_sub(lists:nth(1, ets:lookup_element(find_sub, ReqRate, 2)), erlang:list_to_atom(string:substr(Id, 1, string:len(Id)-2)), From, Hop+1),
+                %To be implemented for reverse found_sub(lists:nth(1, ets:lookup_element(find_sub, ReqRate, 2)), erlang:list_to_atom(string:substr(Id, 1, string:len(Id)-2)), From, Hop+1),
                 ets:insert(match_sub_aq, [{Id, lists:nth(1, ets:lookup_element(find_sub, ReqRate, 2))}]),
                 ets:insert(match_sub_aq, [{lists:nth(1, ets:lookup_element(find_sub, ReqRate, 2)), Id}]),
                 insert_findSub(ReqRate, Id, From, Hop),
@@ -1199,7 +1199,7 @@ found_sub_aq_lockpath(Id, ToNode, Via, From, Hop) ->
                                                     case Hop < lists:nth(1,lists:nth(1,ets:match(find_sub_aq, {'_', ToNode, '_', '$1'}))) of
                                                         true ->
                                                             lager:error("Got lower hop checking subscription: ~p", ets:tab2list(peer_rates)),
-                                                            timer:sleep(20000),
+                                                            timer:sleep(25000),
                                                             case ets:member(peer_rates, "subscription") of
                                                                 true ->
                                                                     lager:error("Lower hop subscription exists"),
