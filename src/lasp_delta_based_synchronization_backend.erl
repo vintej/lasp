@@ -70,6 +70,8 @@ extract_log_type_and_payload({find_sub_aq_lock, Id, ToNode, Node}) ->
     [{delta_send_protocol, {Id, ToNode, Node}}];
 extract_log_type_and_payload({check_tonode, ToNode, Hop, Node}) ->
     [{delta_send_protocol, {ToNode, Hop, Node}}];
+extract_log_type_and_payload({sub_cancel, Node, Id}) ->
+    [{delta_send_protocol, {Node, Id}}];
 extract_log_type_and_payload({find_sub_aq_lock_rev, Id, Node}) ->
     [{delta_send_protocol, {Id, Node}}].
 
@@ -429,6 +431,34 @@ handle_cast({check_tonode, ToNode, Hop, From}, #state{store=Store}=State) ->
     %TO BE DONE!!!!
     {noreply, State};
 
+handle_cast({sub_cancel, From, Id}, #state{store=Store}=State) ->
+    lasp_marathon_simulations:log_message_queue_size("rate_ack"),
+    lager:debug("LASPVIN received node_cancel from ~p Store ~p ~n", [From, Store]),
+    lager:error("Received sub_cancel From:~p for Id:~p ~n", [From, Id]),
+    case ets:member(c1, "subscriber") of
+        true ->
+            case lists:member(From, ets:lookup_element(c1, "susbcriber", 2)) of
+                true-> 
+                    case length(ets:lookup_element(c1, "subscriber", 2)) > 1 of
+                        true -> lager:error("sub_cancel not changing self_rate as more than 1 c1 subscrier ~p ~n", ets:tab2list(c1));
+                        false ->
+                            case ets:member(find_sub_aq, Id) of
+                                true -> lager:error("sub_cancel have to forward rate to ~p ~n", ets:lookup_element(find_sub_aq, Id, 3));
+                                false -> lager:error("sub_cancel Id ~p not in sub_aq ~p", [Id, ets:tab2list(find_sub_aq)])
+                            end,
+                            ets:update_element(peer_rates, "self_rate", {2, os:getenv("RATE_CLASS", "c1")}),
+                            lager:error("Resetted self_rate ~p and deleting rate_ack ~n", [ets:tab2list(peer_rates)]),
+                            ets:delete_all_objects(rate_ack)
+                    end;
+                false -> lager:error("Sub_cancel From ~p is not a c1 subscriber ~p ~n", [From, ets:tab2list(c1)])
+            end;
+        false -> lager:error("sub_cancel but not c1 subscriber ~p ~n", [ets:tab2list(c1)])
+    end,
+    %TO BE DONE!!!!
+    {noreply, State};
+
+
+
 handle_cast({rate_class, From, Rate}, #state{store=Store}=State) ->
     lasp_marathon_simulations:log_message_queue_size("rate_class"),
 
@@ -760,7 +790,28 @@ peer_rate_update(From, NewRate, OldRate) ->
         "c3" -> ets:delete_object(c3, {"peer", From})
     end,
     peer_rate_insert(From, NewRate),
-    ets:update_element(peer_rates, From, {2, NewRate}).
+    ets:update_element(peer_rates, From, {2, NewRate}),
+    timer:sleep(51000),
+    case ets:lookup_element(peer_rates, "self_rate", 2) == "c1" of
+        true ->
+            case ets:member(peer_rates, "subscription") of
+                true ->
+                    case ets:lookup_element(peer_rates, "subscription", 2) == From of
+                        true -> lager:error("New Rate is of the subscription ~p");
+                        false ->
+                            case lists:member([ets:lookup_element(peer_rates, "subscription", 2)], ets:match(find_sub_aq, {'_', '_', '$1', '_'})) of
+                                true ->
+                                    ?SYNC_BACKEND:send(?MODULE, {sub_cancel, lasp_support:mynode(), lists:flatten(ets:match(find_sub_aq, {'$1', '_', ets:lookup_element(peer_rates, "subscription", 2), '_'}))}, ets:lookup_element(peer_rates, "subscription", 2));
+                                false ->
+                                    ok
+                            end
+                    end;
+                false ->
+                    ok
+            end;
+        false ->
+            ok
+    end.
 
 %% @private
 schedule_delta_garbage_collection() ->
@@ -769,7 +820,7 @@ schedule_delta_garbage_collection() ->
 %% @private
 schedule_rate_class_info_propagation() ->
     lager:debug("LASPVIN test"),
-    timer:send_after(10000, rate_info).
+    timer:send_after(5000, rate_info).
 
 %% @private
 schedule_rate_propagation_c1() ->
@@ -840,7 +891,10 @@ get_connections() ->
         '$end_of_table' ->
             get_peers();
         _Else ->
-            ets:lookup_element(myconnections, "connect", 2)
+            case lists:flatlength(get_peers()) > lists:flatlength(ets:lookup_element(myconnections, "connect", 2)) of
+                true -> get_peers();
+                false -> ets:lookup_element(myconnections, "connect", 2)
+            end
     end.
 
 %% @private
@@ -1037,7 +1091,7 @@ found_sub_aq_lockpath(Id, ToNode, Via, From, Hop) ->
                 true ->
                     case lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1', '_'}))) == lasp_support:mynode() of
                         true ->
-                            timer:sleep(5),
+                            %timer:sleep(5),
                             case lists:member(ToNode, get_connections()) of
                                 true ->
                                     case Via == lasp_support:mynode() of
