@@ -1277,7 +1277,7 @@ found_sub_aq_lockpath(Id, ToNode, Via, From, Hop) ->
                                     end
                             end;
                         false ->
-                            case Via == lasp_spport:mynode() of
+                            case Via == lasp_support:mynode() of
                                 true -> lager:error("Via is from self... Skipping Id:~p From:~p Hop:~p", [Id, From, Hop]);
                                 false ->
                                     ets:insert(find_sub_aq, [{Id, ToNode, From, Hop}]),
