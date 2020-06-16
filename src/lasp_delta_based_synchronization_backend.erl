@@ -400,7 +400,7 @@ handle_cast({find_sub, From, ReqRate, Id, Hop}, #state{store=Store}=State) ->
                 true ->
                     timer:sleep(2),
                     insert_findSub(ReqRate, Id, From, Hop),
-                    ets:insert(c1, [{"pseudopeer", erlang:list_to_atom(string:sub_string(Id, 1, string:len(Id)-2)), Hop}]),
+                    %ets:insert(c1, [{"pseudopeer", erlang:list_to_atom(string:sub_string(Id, 1, string:len(Id)-2)), Hop}]),
                     found_sub(Id, lasp_support:mynode(), lasp_support:mynode(), 0);
                 false -> check_sub_exists(From, ReqRate, Id, Hop)
             end,
