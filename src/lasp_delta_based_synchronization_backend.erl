@@ -1138,7 +1138,8 @@ found_sub_aq_lockpath(Id, ToNode, Via, From, Hop) ->
                                                     case ets:member(c1, "pseudopeer") of
                                                         true ->
                                                             case lists:member(ToNode, ets:lookup_element(c1, "pseudopeer", 2)) of
-                                                                true -> lager:error("ToNode ~p exists in c1 pseudopeer ~p ~n", [ToNode, ets:lookup_element(c1, "pseudopeer", 2)]);
+                                                                true -> 
+                                                                    lager:error("ToNode ~p exists in c1 pseudopeer ~p ~n", [ToNode, ets:lookup_element(c1, "pseudopeer", 2)]);
                                                                 false ->
                                                                     timer:sleep(2),
                                                                     case ets:member(peer_rates, "subscription") of
@@ -1204,7 +1205,16 @@ found_sub_aq_lockpath(Id, ToNode, Via, From, Hop) ->
                                                     case ets:member(c1, "pseudopeer") of
                                                         true ->
                                                             case lists:member(ToNode, ets:lookup_element(c1, "pseudopeer", 2)) of
-                                                                true -> lager:error("ToNode ~p exists in c1 pseudopeer ~p ~n", [ToNode, ets:lookup_element(c1, "pseudopeer", 2)]);
+                                                                true -> 
+                                                                    lager:error("ToNode ~p exists in c1 pseudopeer ~p ~n", [ToNode, ets:lookup_element(c1, "pseudopeer", 2)]),
+                                                                    case Hop < lists:nth(1,lists:nth(1,ets:match(c1, {'_', ToNode, '$1'}))) of
+                                                                        true ->
+                                                                            [PseudoDelete] = ets:match_object(c1, {'_', ToNode, '$1'}),
+                                                                            ets:delete_object(c1, PseudoDelete),
+                                                                            send_lock(Id, ToNode, Via, Hop, From);
+                                                                        false ->
+                                                                            lager:error("No adding as RCV HopCount ~p is > Existing Hopcount ~p ~n", [Hop, lists:nth(1,lists:nth(1,ets:match(c1, {'_', ToNode, '$1'})))])
+                                                                    end;
                                                                 false ->
                                                                     timer:sleep(2),
                                                                     case ets:member(peer_rates, "subscription") of
