@@ -1140,7 +1140,7 @@ found_sub_aq_lockpath(Id, ToNode, Via, From, Hop) ->
                                                                     ?SYNC_BACKEND:send(?MODULE, {check_tonode, ToNode, Hop, lasp_support:mynode()}, ets:lookup_element(peer_rates, "subscription", 2));
                                                                 false ->
                                                                     lager:error("No subscription yet and got lower hopcount ~p and potential lock ~n", [ets:tab2list(peer_rates)]),
-                                                                    lager:error("ToNode ~p is not a pseudopeer ~p ~n", [ToNode, ets:lookup_element(c1, "pseudopeer", 2)]),
+                                                                    lager:error("ToNode ~p is not a pseudopeer ~p ~n", [ToNode, ets:tab2list(c1)]),
                                                                     send_lock(Id, ToNode, Via, Hop, From)
                                                             end;
                                                         false ->
@@ -1161,7 +1161,7 @@ found_sub_aq_lockpath(Id, ToNode, Via, From, Hop) ->
                                                                             ?SYNC_BACKEND:send(?MODULE, {check_tonode, ToNode, Hop, lasp_support:mynode()}, ets:lookup_element(peer_rates, "subscription", 2));
                                                                         false ->
                                                                             lager:error("No subscription yet ~p ~n", [ets:tab2list(peer_rates)]),
-                                                                            lager:error("ToNode ~p is not a pseudopeer ~p ~n", [ToNode, ets:lookup_element(c1, "pseudopeer", 2)]),
+                                                                            lager:error("ToNode ~p is not a pseudopeer ~p ~n", [ToNode, ets:tab2list(c1)]),
                                                                             lager:error("Path ToNode:~p does not exists in find_sub_aq:~p", [ToNode, ets:tab2list(find_sub_aq)]),
                                                                             send_lock(Id, ToNode, Via, Hop, From)
                                                                     end
@@ -1251,7 +1251,7 @@ found_sub_aq_lockpath(Id, ToNode, Via, From, Hop) ->
                                                                             ?SYNC_BACKEND:send(?MODULE, {check_tonode, ToNode, Hop, lasp_support:mynode()}, ets:lookup_element(peer_rates, "subscription", 2));
                                                                         false ->
                                                                             lager:error("No subscription yet ~p ~n", [ets:tab2list(peer_rates)]),
-                                                                            lager:error("ToNode ~p is not a pseudopeer ~p ~n", [ToNode, ets:lookup_element(c1, "pseudopeer", 2)]),
+                                                                            lager:error("ToNode ~p is not a pseudopeer ~p ~n", [ToNode, ets:tab2list(c1)]),
                                                                             lager:error("Path ToNode:~p does not exists in find_sub_aq:~p", [ToNode, ets:tab2list(find_sub_aq)]),
                                                                             send_lock(Id, ToNode, Via, Hop, From)
                                                                     end
