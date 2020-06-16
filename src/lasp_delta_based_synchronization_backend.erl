@@ -1200,8 +1200,11 @@ found_sub_aq_lockpath(Id, ToNode, Via, From, Hop) ->
                                                                             case ets:member(find_sub_aq, Id) of
                                                                                 true ->
                                                                                     lager:error("Deleting existing find_sub_aq ~n"),
-                                                                                    [DeleteAq] = ets:match_object(find_sub_aq, {Id, ToNode, '_', '_'}),
-                                                                                    ets:delete_object(find_sub_aq, DeleteAq);
+                                                                                    lists:foreach(fun(Sub_aq) -> 
+                                                                                        ets:delete_object(find_sub_aq, Sub_aq)
+                                                                                    end, ets:match_object(find_sub_aq, {Id, ToNode, '_', '_'}));
+                                                                                    %[DeleteAq] = ets:match_object(find_sub_aq, {Id, ToNode, '_', '_'}),
+                                                                                    %ets:delete_object(find_sub_aq, DeleteAq);
                                                                                 false ->
                                                                                     ok
                                                                             end,
