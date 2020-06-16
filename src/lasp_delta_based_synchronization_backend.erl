@@ -799,12 +799,9 @@ peer_rate_update(From, NewRate, OldRate) ->
     %lager:error("Checking sub_cancel"),
     %case ets:lookup_element(peer_rates, "self_rate", 2) == "c1" of
     %    true ->
-    %        case ets:member(peer_rates, "subscription") of
+    %       case ets:member(peer_rates, "subscription") of
     %            true ->
-    %                case ets:lookup_element(peer_rates, "subscription", 2) == From of
-    %                    true -> lager:error("New Rate is of the subscription ~p");
-    %                    false ->
-    %                        case lists:member([ets:lookup_element(peer_rates, "subscription", 2)], ets:match(find_sub_aq, {'_', '_', '$1', '_'})) of
+    %                case lists:member([ets:lookup_element(peer_rates, "subscription", 2)], ets:match(find_sub_aq, {'_', '_', '$1', '_'})) of
     %                            true ->
     %                                case NewRate == "c1" of
     %                                    true ->
@@ -1280,9 +1277,13 @@ found_sub_aq_lockpath(Id, ToNode, Via, From, Hop) ->
                                     end
                             end;
                         false ->
-                            ets:insert(find_sub_aq, [{Id, ToNode, From, Hop}]),
-                            lager:error("LASPVINDEBUG Forwarding find_sub_aq for Id: ~p ToNode:~p From:~p to ~p HopCount:~p ~n", [Id, ToNode, From, lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1', '_'}))), Hop+1]), 
-                            ?SYNC_BACKEND:send(?MODULE, {find_sub_aq, Id, ToNode, From, lasp_support:mynode(), Hop+1}, lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1', '_'}))))
+                            case Via == lasp_spport:mynode() of
+                                true -> lager:error("Via is from self... Skipping Id:~p From:~p Hop:~p", [Id, From, Hop]);
+                                false ->
+                                    ets:insert(find_sub_aq, [{Id, ToNode, From, Hop}]),
+                                    lager:error("LASPVINDEBUG Forwarding find_sub_aq for Id: ~p ToNode:~p From:~p to ~p HopCount:~p ~n", [Id, ToNode, From, lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1', '_'}))), Hop+1]), 
+                                    ?SYNC_BACKEND:send(?MODULE, {find_sub_aq, Id, ToNode, From, lasp_support:mynode(), Hop+1}, lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1', '_'}))))
+                            end
                     end;
                 false ->
                     lager:error("LASPVIN ID ~p not in find_sub ~p ~n", [Id, ets:tab2list(find_sub)])
