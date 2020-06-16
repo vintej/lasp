@@ -1188,11 +1188,23 @@ found_sub_aq_lockpath(Id, ToNode, Via, From, Hop) ->
                                                                     lager:error("Lower hop subscription exists"),
                                                                     case lists:member([ets:lookup_element(peer_rates, "subscription", 2)], ets:match(find_sub_aq, {'_', ToNode, '$1', '_'})) of
                                                                         true ->
-                                                                            % Cancel subscription and send lock for new
-                                                                            lager:error("Lower hop Subscription is locked for this ToNode ~p sending cancel ~n", [ToNode]),
-                                                                            ?SYNC_BACKEND:send(?MODULE, {sub_cancel, lasp_support:mynode(), Id, ToNode}, ets:lookup_element(peer_rates, "subscription", 2)),
-                                                                            lager:error("Lower hop Deleted Subscription"),
-                                                                            ets:delete(peer_rates, "subscription"),
+                                                                            % Cancel subscription and send lock for new,
+                                                                            case From == ets:lookup_element(peer_rates, "subscription", 2) of
+                                                                                true -> lager:error("Not sending cancel as From==Subscription ~n");
+                                                                                false ->
+                                                                                    lager:error("Lower hop Subscription is locked for this ToNode ~p sending cancel ~n", [ToNode]),
+                                                                                    ?SYNC_BACKEND:send(?MODULE, {sub_cancel, lasp_support:mynode(), Id, ToNode}, ets:lookup_element(peer_rates, "subscription", 2)),
+                                                                                    lager:error("Lower hop Deleted Subscription"),
+                                                                                    ets:delete(peer_rates, "subscription")
+                                                                            end,
+                                                                            case ets:member(find_sub_aq, Id) of
+                                                                                true ->
+                                                                                    lager:error("Deleting existing find_sub_aq ~n"),
+                                                                                    [DeleteAq] = ets:match_object(find_sub_aq, {Id, ToNode, '_', '_'}),
+                                                                                    ets:delete_object(find_sub_aq, DeleteAq);
+                                                                                false ->
+                                                                                    ok
+                                                                            end,
                                                                             send_lock(Id, ToNode, Via, Hop, From);
                                                                         false ->
                                                                             send_lock(Id, ToNode, Via, Hop, From)
