@@ -1004,6 +1004,7 @@ check_sub_exists(From, ReqRate, Id, Hop) ->
                 end;
              false -> 
                 lager:error("LASPVINDEBUG Matching find_sub rates found for Id: ~p but forwarding  ~n", [Id]),
+                insert_findSub(ReqRate, Id, From, Hop),
                 forward_sub_req(Id, Hop)
                 %lager:debug("LASPVIN find_sub:insert ReqRate:~p Id:~p From:~p ~n", [ReqRate, Id, From]),
                 %%%ERROR HERE
