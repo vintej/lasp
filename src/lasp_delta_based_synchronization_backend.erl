@@ -1190,95 +1190,11 @@ found_sub_aq_lockpath(Id, ToNode, Via, From, Hop) ->
                                 false ->
                                     case Via==From of
                                         true ->
-                                             lager:error("Find_sub_aq ToNodes before checking if ToNode ~p exists : ~p", [ToNode, ets:match(find_sub_aq, {'_', '$1', '_', '_'})]),
-                                             case lists:member([ToNode], ets:match(find_sub_aq, {'_', '$1', '_', '_'})) of
-                                                true ->
-                                                    lager:error("LASPVIN path ToNode: ~p exists in find_sub_aq: ~p ~n",[ToNode, ets:match_object(find_sub_aq, {'_', '$1', '_', '_'})]),
-                                                    case Hop < lists:nth(1,lists:nth(1,ets:match(find_sub_aq, {'_', ToNode, '_', '$1'}))) of
-                                                        true ->
-                                                            lager:error("Got lower hop checking subscription: ~p", ets:tab2list(peer_rates)),
-                                                            timer:sleep(25000),
-                                                            case ets:member(peer_rates, "subscription") of
-                                                                true ->
-                                                                    lager:error("Lower hop subscription exists"),
-                                                                    case lists:member([ets:lookup_element(peer_rates, "subscription", 2)], ets:match(find_sub_aq, {'_', ToNode, '$1', '_'})) of
-                                                                        true ->
-                                                                            % Cancel subscription and send lock for new,
-                                                                            case From == ets:lookup_element(peer_rates, "subscription", 2) of
-                                                                                true -> lager:error("Not sending cancel as From==Subscription ~n");
-                                                                                false ->
-                                                                                    lager:error("Lower hop Subscription is locked for this ToNode ~p sending cancel ~n", [ToNode]),
-                                                                                    ?SYNC_BACKEND:send(?MODULE, {sub_cancel, lasp_support:mynode(), Id, ToNode}, ets:lookup_element(peer_rates, "subscription", 2)),
-                                                                                    lager:error("Lower hop Deleted Subscription"),
-                                                                                    ets:delete(peer_rates, "subscription")
-                                                                            end,
-                                                                            case ets:member(find_sub_aq, Id) of
-                                                                                true ->
-                                                                                    lager:error("Deleting existing find_sub_aq ~n"),
-                                                                                    lists:foreach(fun(Sub_aq) -> 
-                                                                                        ets:delete_object(find_sub_aq, Sub_aq)
-                                                                                    end, ets:match_object(find_sub_aq, {Id, ToNode, '_', '_'}));
-                                                                                    %[DeleteAq] = ets:match_object(find_sub_aq, {Id, ToNode, '_', '_'}),
-                                                                                    %ets:delete_object(find_sub_aq, DeleteAq);
-                                                                                false ->
-                                                                                    ok
-                                                                            end,
-                                                                            send_lock(Id, ToNode, Via, Hop, From);
-                                                                        false ->
-                                                                            send_lock(Id, ToNode, Via, Hop, From)
-                                                                    end;
-                                                                false -> 
-                                                                    lager:error("Susbcription not found ~p sending lock lower hop ~n", ets:tab2list(peer_rates)),
-                                                                    send_lock(Id, ToNode, Via, Hop, From)
-                                                            end;
-                                                        false -> lager:error("RcvHop ~p > Existing Hop ~p for ToNode~p ~n", [Hop, lists:nth(1,lists:nth(1,ets:match(find_sub_aq, {'_', ToNode, '_', '$1'}))), ToNode])
-                                                    end;
-                                                false ->
-                                                    case ets:member(c1, "pseudopeer") of
-                                                        true ->
-                                                            case lists:member(ToNode, ets:lookup_element(c1, "pseudopeer", 2)) of
-                                                                true -> 
-                                                                    lager:error("ToNode ~p exists in c1 pseudopeer ~p ~n", [ToNode, ets:lookup_element(c1, "pseudopeer", 2)]),
-                                                                    case Hop < lists:nth(1,lists:nth(1,ets:match(c1, {'_', ToNode, '$1'}))) of
-                                                                        true ->
-                                                                            [PseudoDelete] = ets:match_object(c1, {'_', ToNode, '$1'}),
-                                                                            ets:delete_object(c1, PseudoDelete),
-                                                                            send_lock(Id, ToNode, Via, Hop, From);
-                                                                        false ->
-                                                                            lager:error("No adding as RCV HopCount ~p is > Existing Hopcount ~p ~n", [Hop, lists:nth(1,lists:nth(1,ets:match(c1, {'_', ToNode, '$1'})))])
-                                                                    end;
-                                                                false ->
-                                                                    timer:sleep(2),
-                                                                    case ets:member(peer_rates, "subscription") of
-                                                                        true -> 
-                                                                            lager:error("Checking if subscription ~p has path ToNode ~p ~n", [ets:lookup_element(peer_rates, "subscription", 2)]),
-                                                                            ets:insert(temp_tonode, [{Id, ToNode, Via, Hop}]),
-                                                                            ?SYNC_BACKEND:send(?MODULE, {check_tonode, ToNode, Hop, lasp_support:mynode()}, ets:lookup_element(peer_rates, "subscription", 2));
-                                                                        false ->
-                                                                            lager:error("No subscription yet ~p ~n", [ets:tab2list(peer_rates)]),
-                                                                            lager:error("ToNode ~p is not a pseudopeer ~p ~n", [ToNode, ets:tab2list(c1)]),
-                                                                            lager:error("Path ToNode:~p does not exists in find_sub_aq:~p", [ToNode, ets:tab2list(find_sub_aq)]),
-                                                                            send_lock(Id, ToNode, Via, Hop, From)
-                                                                    end
-                                                            end;
-                                                        false ->
-                                                            lager:error("Path ToNode:~p does not exists in find_sub_aq:~p", [ToNode, ets:tab2list(find_sub_aq)]),
-                                                            timer:sleep(2),
-                                                            case ets:member(peer_rates, "subscription") of
-                                                                        true -> 
-                                                                            lager:error("Checking if subscription ~p has path ToNode ~p ~n", [ets:lookup_element(peer_rates, "subscription", 2)]),
-                                                                            ets:insert(temp_tonode, [{Id, ToNode, Via, Hop}]),
-                                                                            ?SYNC_BACKEND:send(?MODULE, {check_tonode, ToNode, Hop, lasp_support:mynode()}, ets:lookup_element(peer_rates, "subscription", 2));
-                                                                        false ->
-                                                                            lager:error("No subscription yet ~p ~n", [ets:tab2list(peer_rates)]),
-                                                                            send_lock(Id, ToNode, Via, Hop, From)
-                                                            end
-                                                    end
-                                            end;
+                                             further_checks(Id, ToNode, Via, From, Hop);
                                         false ->
                                             case lists:member(Via, get_connections()) of
                                                 true -> lager:error("Via is in connections ~p ... Skipping...", [get_connections()]);
-                                                false -> lager:error("Not decided what to do here")
+                                                false -> further_checks(Id, ToNode, Via, From, Hop)
                                             end
                                     end
                             end;
@@ -1342,6 +1258,96 @@ forward_aq_lock(Id, ToNode, From) ->
                     ?SYNC_BACKEND:send(?MODULE, {find_sub_aq_lock, Id, ToNode, lasp_support:mynode()}, lists:nth(1,lists:nth(1,ets:match(find_sub_aq, {Id, ToNode, '$1', '_'}))))
                     %ets:delete(find_sub_aq, Id)
     end.
+
+%%private
+further_checks(Id, ToNode, Via, From, Hop) ->
+    lager:error("Find_sub_aq ToNodes before checking if ToNode ~p exists : ~p", [ToNode, ets:match(find_sub_aq, {'_', '$1', '_', '_'})]),
+    case lists:member([ToNode], ets:match(find_sub_aq, {'_', '$1', '_', '_'})) of
+        true ->
+            lager:error("LASPVIN path ToNode: ~p exists in find_sub_aq: ~p ~n",[ToNode, ets:match_object(find_sub_aq, {'_', '$1', '_', '_'})]),
+            case Hop < lists:nth(1,lists:nth(1,ets:match(find_sub_aq, {'_', ToNode, '_', '$1'}))) of
+                true ->
+                    lager:error("Got lower hop checking subscription: ~p", ets:tab2list(peer_rates)),
+                    timer:sleep(25000),
+                    case ets:member(peer_rates, "subscription") of
+                        true ->
+                            lager:error("Lower hop subscription exists"),
+                            case lists:member([ets:lookup_element(peer_rates, "subscription", 2)], ets:match(find_sub_aq, {'_', ToNode, '$1', '_'})) of
+                                true ->
+                                    % Cancel subscription and send lock for new,
+                                    case From == ets:lookup_element(peer_rates, "subscription", 2) of
+                                        true -> lager:error("Not sending cancel as From==Subscription ~n");
+                                        false ->
+                                            lager:error("Lower hop Subscription is locked for this ToNode ~p sending cancel ~n", [ToNode]),
+                                            ?SYNC_BACKEND:send(?MODULE, {sub_cancel, lasp_support:mynode(), Id, ToNode}, ets:lookup_element(peer_rates, "subscription", 2)),
+                                            lager:error("Lower hop Deleted Subscription"),
+                                            ets:delete(peer_rates, "subscription")
+                                    end,
+                                    case ets:member(find_sub_aq, Id) of
+                                        true ->
+                                            lager:error("Deleting existing find_sub_aq ~n"),
+                                            lists:foreach(fun(Sub_aq) -> 
+                                                ets:delete_object(find_sub_aq, Sub_aq)
+                                            end, ets:match_object(find_sub_aq, {Id, ToNode, '_', '_'}));
+                                            %[DeleteAq] = ets:match_object(find_sub_aq, {Id, ToNode, '_', '_'}),
+                                            %ets:delete_object(find_sub_aq, DeleteAq);
+                                        false ->
+                                            ok
+                                    end,
+                                    send_lock(Id, ToNode, Via, Hop, From);
+                                false ->
+                                    send_lock(Id, ToNode, Via, Hop, From)
+                            end;
+                        false -> 
+                            lager:error("Susbcription not found ~p sending lock lower hop ~n", ets:tab2list(peer_rates)),
+                            send_lock(Id, ToNode, Via, Hop, From)
+                    end;
+                false -> lager:error("RcvHop ~p > Existing Hop ~p for ToNode~p ~n", [Hop, lists:nth(1,lists:nth(1,ets:match(find_sub_aq, {'_', ToNode, '_', '$1'}))), ToNode])
+            end;
+        false ->
+            case ets:member(c1, "pseudopeer") of
+                true ->
+                    case lists:member(ToNode, ets:lookup_element(c1, "pseudopeer", 2)) of
+                        true -> 
+                            lager:error("ToNode ~p exists in c1 pseudopeer ~p ~n", [ToNode, ets:lookup_element(c1, "pseudopeer", 2)]),
+                            case Hop < lists:nth(1,lists:nth(1,ets:match(c1, {'_', ToNode, '$1'}))) of
+                                true ->
+                                    [PseudoDelete] = ets:match_object(c1, {'_', ToNode, '$1'}),
+                                    ets:delete_object(c1, PseudoDelete),
+                                    send_lock(Id, ToNode, Via, Hop, From);
+                                false ->
+                                    lager:error("No adding as RCV HopCount ~p is > Existing Hopcount ~p ~n", [Hop, lists:nth(1,lists:nth(1,ets:match(c1, {'_', ToNode, '$1'})))])
+                            end;
+                        false ->
+                            timer:sleep(2),
+                            case ets:member(peer_rates, "subscription") of
+                                true -> 
+                                    lager:error("Checking if subscription ~p has path ToNode ~p ~n", [ets:lookup_element(peer_rates, "subscription", 2)]),
+                                    ets:insert(temp_tonode, [{Id, ToNode, Via, Hop}]),
+                                    ?SYNC_BACKEND:send(?MODULE, {check_tonode, ToNode, Hop, lasp_support:mynode()}, ets:lookup_element(peer_rates, "subscription", 2));
+                                false ->
+                                    lager:error("No subscription yet ~p ~n", [ets:tab2list(peer_rates)]),
+                                    lager:error("ToNode ~p is not a pseudopeer ~p ~n", [ToNode, ets:tab2list(c1)]),
+                                    lager:error("Path ToNode:~p does not exists in find_sub_aq:~p", [ToNode, ets:tab2list(find_sub_aq)]),
+                                    send_lock(Id, ToNode, Via, Hop, From)
+                            end
+                    end;
+                false ->
+                    lager:error("Path ToNode:~p does not exists in find_sub_aq:~p", [ToNode, ets:tab2list(find_sub_aq)]),
+                    timer:sleep(2),
+                    case ets:member(peer_rates, "subscription") of
+                               true -> 
+                                    lager:error("Checking if subscription ~p has path ToNode ~p ~n", [ets:lookup_element(peer_rates, "subscription", 2)]),
+                                    ets:insert(temp_tonode, [{Id, ToNode, Via, Hop}]),
+                                    ?SYNC_BACKEND:send(?MODULE, {check_tonode, ToNode, Hop, lasp_support:mynode()}, ets:lookup_element(peer_rates, "subscription", 2));
+                                false ->
+                                    lager:error("No subscription yet ~p ~n", [ets:tab2list(peer_rates)]),
+                                    send_lock(Id, ToNode, Via, Hop, From)
+                    end
+            end
+    end.
+
+
 
 %%private
 forward_aq_lock_rev(Id) ->
