@@ -989,34 +989,17 @@ forward_sub_req(Id, Hop) ->
 check_sub_exists(From, ReqRate, Id, Hop) ->
     lager:error("Checking sub_exists for Id:~p From:~p Hop:~p ~n", [Id, From, Hop]),
     timer:sleep(2),
-    case ets:member(find_sub, ReqRate) of
+    case lists:member(Id, ets:lookup_element(find_sub, ReqRate, 2)) of
        true ->
-          case lists:member(Id, ets:lookup_element(find_sub, ReqRate, 2)) of
-             true -> 
-                 lager:debug("LASPVIN Find_sub request id ~p exists ~n", [Id]),
-                 case Hop < lists:nth(1,lists:nth(1,ets:match(find_sub, {'_', Id, '_', '$1'}))) of
-                    true -> 
-                        lager:error("Find_sub request id ~p exists but Rcv hopcount ~p is lower than existing ~p ~n", [Id, Hop, lists:nth(1,lists:nth(1,ets:match(find_sub, {'_', Id, '_', '$1'})))]),
-                        ets:delete_object(find_sub, {'_', Id, '_', '_'}),
-                        insert_findSub(ReqRate, Id, From, Hop),
-                        lager:error("Deleted rqeuest id, updated it with lower hopcount ~p ~n", [ets:tab2list(find_sub)]);
-                    false -> ok
-                end;
-             false -> 
-                lager:error("LASPVINDEBUG Matching find_sub rates found for Id: ~p but forwarding  ~n", [Id]),
-                insert_findSub(ReqRate, Id, From, Hop),
-                forward_sub_req(Id, Hop)
-                %lager:debug("LASPVIN find_sub:insert ReqRate:~p Id:~p From:~p ~n", [ReqRate, Id, From]),
-                %%%ERROR HERE
-                %lager:error("LASPVINDEBUG Informing ~p that found peer for ID:~ toNode: ~p Via: ~p HopCount: ~p +1 ~n", [lists:nth(1,ets:lookup_element(find_sub, ReqRate, 3)), lists:nth(1, ets:lookup_element(find_sub, ReqRate, 2)), string:substr(Id, 1, string:len(Id)-2), From, Hop]),
-                %To be implemented for reverse found_sub(lists:nth(1, ets:lookup_element(find_sub, ReqRate, 2)), erlang:list_to_atom(string:substr(Id, 1, string:len(Id)-2)), From, Hop+1),
-                %ets:insert(match_sub_aq, [{Id, lists:nth(1, ets:lookup_element(find_sub, ReqRate, 2))}]),
-                %ets:insert(match_sub_aq, [{lists:nth(1, ets:lookup_element(find_sub, ReqRate, 2)), Id}]),
-                %insert_findSub(ReqRate, Id, From, Hop),
-                %lager:error("LASPVINDEBUG Added match_sub_aq ~p ~n", [ets:tab2list(match_sub_aq)]),
-                %lager:error("LASPVIN Informing ~p that found peer for ID:~ toNode: ~p Via:~p HopCount:~p+1 ~n", [From, Id, erlang:list_to_atom(string:sub_string(lists:nth(1,ets:lookup_element(find_sub, ReqRate, 2)), 1, string:len(lists:nth(1, ets:lookup_element(find_sub, ReqRate, 2)))-2)), lists:nth(1,ets:lookup_element(find_sub, "c1", 3))]),
-                %found_sub(Id, erlang:list_to_atom(string:sub_string(lists:nth(1,ets:lookup_element(find_sub, ReqRate, 2)), 1, string:len(lists:nth(1, ets:lookup_element(find_sub, ReqRate, 2)))-2)), lists:nth(1,ets:lookup_element(find_sub, "c1", 3)), lists:nth(1, ets:lookup_element(find_sub, "c1", 4))+1)
-          end;
+            case Hop < lists:nth(1,lists:nth(1,ets:match(find_sub, {'_', Id, '_', '$1'}))) of
+                true -> 
+                    lager:error("Find_sub request id ~p exists but Rcv hopcount ~p is lower than existing ~p ~n", [Id, Hop, lists:nth(1,lists:nth(1,ets:match(find_sub, {'_', Id, '_', '$1'})))]),
+                    ets:delete_object(find_sub, {'_', Id, '_', '_'}),
+                    insert_findSub(ReqRate, Id, From, Hop),
+                    lager:error("Deleted rqeuest id, updated it with lower hopcount ~p ~n", [ets:tab2list(find_sub)]);
+                false ->
+                    lager:error("Hop ~p for Id ~p is more than existing ~p...Skipping", [Hop, Id, lists:nth(1,lists:nth(1,ets:match(find_sub, {'_', Id, '_', '$1'})))])
+            end;
        false ->
           insert_findSub(ReqRate, Id, From, Hop),
           lager:debug("LASPVIN test2 coming here 1"),
