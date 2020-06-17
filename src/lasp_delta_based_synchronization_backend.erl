@@ -509,7 +509,16 @@ handle_cast({rate_subscribe, From, Rate}, #state{store=Store}=State) ->
              "c1" -> 
                  case check_member_list(c1, From, "subscriber") of
                     true -> ok;
-                    false -> ets:insert(c1, [{"subscriber", From}])
+                    false -> 
+                        ets:insert(c1, [{"subscriber", From}]),
+                        case ets:member(c1, "peer") of
+                            true ->
+                                case lists:member(From, ets:lookup_element(c1, "peer", 2)) of
+                                    true -> ok;
+                                    false -> ets:insert(c1, [{"peer", From}])
+                                end;
+                            false -> ets:insert(c1, [{"peer", From}])
+                        end
                  end;
              "c2" -> 
                  case check_member_list(c2, From, "subscriber") of
