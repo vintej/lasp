@@ -1188,9 +1188,8 @@ found_sub_aq_lockpath(Id, ToNode, Via, From, Hop) ->
                                             lager:error("Subscription must be done already ToNode ~p ~n", [ets:tab2list(c1)])
                                     end;
                                 false ->
-                                    case lists:member(Via, get_connections()) of
-                                        true -> lager:error("Via is in connections ~p ... Skipping...", [get_connections()]);
-                                        false ->
+                                    case Via==From of
+                                        true ->
                                              lager:error("Find_sub_aq ToNodes before checking if ToNode ~p exists : ~p", [ToNode, ets:match(find_sub_aq, {'_', '$1', '_', '_'})]),
                                              case lists:member([ToNode], ets:match(find_sub_aq, {'_', '$1', '_', '_'})) of
                                                 true ->
@@ -1275,7 +1274,12 @@ found_sub_aq_lockpath(Id, ToNode, Via, From, Hop) ->
                                                                             send_lock(Id, ToNode, Via, Hop, From)
                                                             end
                                                     end
-                                             end
+                                            end;
+                                        false ->
+                                            case lists:member(Via, get_connections()) of
+                                                true -> lager:error("Via is in connections ~p ... Skipping...", [get_connections()]);
+                                                false -> lager:error("Not decided what to do here")
+                                            end
                                     end
                             end;
                         false ->
