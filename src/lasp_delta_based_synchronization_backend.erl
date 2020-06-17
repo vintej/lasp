@@ -989,18 +989,28 @@ forward_sub_req(Id, Hop) ->
 check_sub_exists(From, ReqRate, Id, Hop) ->
     lager:error("Checking sub_exists for Id:~p From:~p Hop:~p ~n", [Id, From, Hop]),
     timer:sleep(2),
-    case lists:member(Id, ets:lookup_element(find_sub, ReqRate, 2)) of
-       true ->
-            case Hop < lists:nth(1,lists:nth(1,ets:match(find_sub, {'_', Id, '_', '$1'}))) of
+    case ets:member(find_sub, ReqRate) of
+        true ->
+            case lists:member(Id, ets:lookup_element(find_sub, ReqRate, 2)) of
                 true -> 
-                    lager:error("Find_sub request id ~p exists but Rcv hopcount ~p is lower than existing ~p ~n", [Id, Hop, lists:nth(1,lists:nth(1,ets:match(find_sub, {'_', Id, '_', '$1'})))]),
-                    ets:delete_object(find_sub, {'_', Id, '_', '_'}),
-                    insert_findSub(ReqRate, Id, From, Hop),
-                    lager:error("Deleted rqeuest id, updated it with lower hopcount ~p ~n", [ets:tab2list(find_sub)]);
+                    case Hop < lists:nth(1,lists:nth(1,ets:match(find_sub, {'_', Id, '_', '$1'}))) of
+                        true -> 
+                            lager:error("Find_sub request id ~p exists but Rcv hopcount ~p is lower than existing ~p ~n", [Id, Hop, lists:nth(1,lists:nth(1,ets:match(find_sub, {'_', Id, '_', '$1'})))]),
+                            ets:delete_object(find_sub, {'_', Id, '_', '_'}),
+                            insert_findSub(ReqRate, Id, From, Hop),
+                            lager:error("Deleted rqeuest id, updated it with lower hopcount ~p ~n", [ets:tab2list(find_sub)]);
+                        false ->
+                            lager:error("Hop ~p for Id ~p is more than existing ~p...Skipping", [Hop, Id, lists:nth(1,lists:nth(1,ets:match(find_sub, {'_', Id, '_', '$1'})))])
+                    end;
                 false ->
-                    lager:error("Hop ~p for Id ~p is more than existing ~p...Skipping", [Hop, Id, lists:nth(1,lists:nth(1,ets:match(find_sub, {'_', Id, '_', '$1'})))])
+                    check_sub_further(From, ReqRate, Id, Hop)
             end;
-       false ->
+        false ->
+            check_sub_further(From, ReqRate, Id, Hop)
+    end.
+
+%%private
+check_sub_further(From, ReqRate, Id, Hop) ->
           insert_findSub(ReqRate, Id, From, Hop),
           lager:debug("LASPVIN test2 coming here 1"),
           case ReqRate of
@@ -1048,8 +1058,7 @@ check_sub_exists(From, ReqRate, Id, Hop) ->
                          false -> lager:debug("LASPVIN send to peers"), forward_sub_req(Id, Hop)
                       end
                 end
-          end
-    end.
+          end.
 
 %%private
 forward_find_sub_on_join(From) ->
