@@ -142,6 +142,7 @@ handle_cast({delta_exchange, Peer, ObjectFilterFun},
 
                 AckMap = case Ack < Counter orelse ClientInReactiveMode of
                     true ->
+                        lager:error("LASPVIN Sending delta to ~p at ~p ~n", [Peer, time_stamp()]),
                         ?SYNC_BACKEND:send(?MODULE, {delta_send, lasp_support:mynode(), {Id, Type, Metadata, Deltas}, Counter}, Peer),
 
                         orddict:map(
