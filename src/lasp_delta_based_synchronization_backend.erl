@@ -62,6 +62,10 @@ extract_log_type_and_payload({rate_ack, Node, Rate}) ->
     [{delta_send_protocol, {Node, Rate}}];
 extract_log_type_and_payload({rate_subscribe, Node, Rate}) ->
     [{delta_send_protocol, {Node, Rate}}];
+extract_log_type_and_payload({rate_subscribe_ack, Node, Rate}) ->
+    [{delta_send_protocol, {Node, Rate}}];
+extract_log_type_and_payload({rate_refresh, Node}) ->
+    [{delta_send_protocol, {Node}}];
 extract_log_type_and_payload({find_sub, Node, Rate, Id, Hop}) ->
     [{delta_send_protocol, {Node, Rate, Id, Hop}}];
 extract_log_type_and_payload({find_sub_aq, Id, ToNode, ViaNode, Node, Hop}) ->
@@ -102,6 +106,7 @@ init([Store, Actor]) ->
     ets:new(peer_rates, [ordered_set, named_table, public]),
     ets:insert(peer_rates, [{"self_rate", os:getenv("RATE_CLASS", "c1")}]),
     ets:new(rate_ack, [named_table, ordered_set, public]),
+    ets:insert(rate_ack, [{"NoSub", 0}]),
     ets:new(temp_tonode, [ordered_set, named_table, public]),
     ets:new(match_sub_aq, [named_table, bag, public]),
     ets:new(c1, [named_table, bag, public]),
@@ -467,6 +472,7 @@ handle_cast({check_tonode_ack, ToNode, Act, From}, #state{store=Store}=State) ->
                                 true -> ok;
                                 false ->
                                     ets:delete(peer_rates, "subscription"),
+                                    ets:insert(rate_ack, [{"NoSub", 0}]),
                                     lager:error("Sendind sub_cancel to ~p as was subscribed for this tonode ~p only ~n", [Fsub, FId]),
                                     ?SYNC_BACKEND:send(?MODULE, {sub_cancel, lasp_support:mynode(), FId, TempToNode}, Fsub)
                             end;
@@ -579,10 +585,28 @@ handle_cast({rate_subscribe, From, Rate}, #state{store=Store}=State) ->
                     false -> ets:insert(c3, [{"subscriber", From}])
                  end
     end,
+    ?SYNC_BACKEND:send(?MODULE, {rate_subscribe_ack, lasp_support:mynode(), Rate}, From),
     lager:debug("LASPVIN c1 list: ~p ~n", [ets:tab2list(c1)]),
     lager:debug("LASPVIN c2 list: ~p ~n", [ets:tab2list(c2)]),
     lager:debug("LASPVIN c3 list: ~p ~n", [ets:tab2list(c3)]),
     {noreply, State};
+
+handle_cast({rate_subscribe_ack, From, Rate}, #state{store=Store}=State) ->
+    lager:debug("LASPVIN received rate_subscribe_ack From:~p rate:~p Store:~p", [From, Rate, Store]),
+    lager:error("Reate subscribe ack received from ~p for rate ~p ~n", [From, Rate]),
+    ets:insert(peer_rates, [{"subscription", From}]),
+    ets:delete(rate_ack, "NoSub"),
+    {noreply, State};
+
+handle_cast({rate_refresh, From}, #state{store=Store}=State) ->
+    lager:debug("LASPVIN received rate_refresh From:~p Store:~p", [From, Store]),
+    lager:error("Received rate refresh request from ~p for rate ~p ~n", [From]),
+    case ets:member(rate_ack, From) of
+        true -> ets:delete(rate_ack, From);
+        false -> ok
+    end,
+    {noreply, State};
+
 
 %% @private
 handle_cast(Msg, State) ->
@@ -667,10 +691,10 @@ handle_info(delta_gc, #state{store=Store}=State) ->
 handle_info(rate_info, #state{store=Store}=State) ->
 
     %% Get the active set from the membership protocol.
-    {ok, Members} = ?SYNC_BACKEND:membership(),
+    %{ok, Members} = ?SYNC_BACKEND:membership(),
 
     %% Remove ourself and compute exchange peers.
-    Peers = ?SYNC_BACKEND:compute_exchange(?SYNC_BACKEND:without_me(Members)),
+    %Peers = ?SYNC_BACKEND:compute_exchange(?SYNC_BACKEND:without_me(Members)),
     lager:debug("LASPVIN Store rate_info ~p ~n", [Store]), 
     %% Transmit rate.
     lists:foreach(fun(Peer) ->
@@ -681,7 +705,7 @@ handle_info(rate_info, #state{store=Store}=State) ->
                                ?SYNC_BACKEND:send(?MODULE, {rate_class, lasp_support:mynode(), ets:lookup_element(peer_rates, "self_rate", 2)}, Peer)
                         end
                   end, 
-                  Peers),
+                  get_connections()),
     check_subscription(),
     schedule_rate_class_info_propagation(),
     {noreply, State};
@@ -969,6 +993,20 @@ get_connections() ->
 
 %% @private
 check_subscription() ->
+    case ets:member(rate_ack, "NoSub") of
+        true ->
+            ets:update_counter(rate_ack, "NoSub", {2, 1}),
+            case ets:lookup_element(rate_ack, "NoSub", 2) > 60 of
+                true ->
+                    ets:delete_all_objects(rate_ack),
+                    ets:insert(rate_ack, [{"NoSub", 0}]),
+                    lists:foreach(fun(Peer) ->
+                        ?SYNC_BACKEND:send(?MODULE, {rate_refresh, lasp_support:mynode()}, Peer)
+                    end, get_connections());
+                false -> ok
+            end;
+        false -> ok
+    end,
     case ets:member(peer_rates, "subscription") of
        true -> lager:debug("LASPVIN subscription done already ~n"),ok;
        false ->
@@ -978,8 +1016,8 @@ check_subscription() ->
                    true ->
                       case ets:member(c1, "peer") of
                          true -> 
-                            lager:error("Subscribing to ~p case1 ~n", lists:nth(1, ets:lookup_element(c1, "peer", 2))),
-                            ets:insert(peer_rates, [{"subscription", lists:nth(1, ets:lookup_element(c1, "peer", 2))}]), 
+                            lager:error("Sending Subscription to ~p case1 ~n", lists:nth(1, ets:lookup_element(c1, "peer", 2))),
+                            %ets:insert(peer_rates, [{"subscription", lists:nth(1, ets:lookup_element(c1, "peer", 2))}]), 
                             ?SYNC_BACKEND:send(?MODULE, {rate_subscribe, lasp_support:mynode(), ets:lookup_element(peer_rates, "self_rate", 2)}, lists:nth(1, ets:lookup_element(c1, "peer", 2)));
                          false -> 
                             lager:debug("LASPVIN no peer to subscribe Case 1 ~n ")
@@ -987,14 +1025,14 @@ check_subscription() ->
                    false ->
                       case ets:member(c2, "peer") of
                          true ->  
-                            lager:error("Subscribing to ~p case2 ~n", lists:nth(1, ets:lookup_element(c2, "peer", 2))),
-                            ets:insert(peer_rates, [{"subscription", lists:nth(1, ets:lookup_element(c2, "peer", 2))}]), 
+                            lager:error("Sending Subscription to ~p case2 ~n", lists:nth(1, ets:lookup_element(c2, "peer", 2))),
+                            %ets:insert(peer_rates, [{"subscription", lists:nth(1, ets:lookup_element(c2, "peer", 2))}]), 
                             ?SYNC_BACKEND:send(?MODULE, {rate_subscribe, lasp_support:mynode(), ets:lookup_element(peer_rates, "self_rate", 2)}, lists:nth(1, ets:lookup_element(c2, "peer", 2)));
                          false ->
                             case ets:member(c1, "peer") of
                                true ->
-                                   lager:error("Subscribing to ~p case3 ~n", lists:nth(1, ets:lookup_element(c1, "peer", 2))),
-                                   ets:insert(peer_rates, [{"subscription", lists:nth(1, ets:lookup_element(c1, "peer", 2))}]),
+                                   lager:error("Sending Subscription to ~p case3 ~n", lists:nth(1, ets:lookup_element(c1, "peer", 2))),
+                                   %ets:insert(peer_rates, [{"subscription", lists:nth(1, ets:lookup_element(c1, "peer", 2))}]),
                                    ?SYNC_BACKEND:send(?MODULE, {rate_subscribe, lasp_support:mynode(), ets:lookup_element(peer_rates, "self_rate", 2)}, lists:nth(1, ets:lookup_element(c1, "peer", 2)));
                                false -> lager:debug("LASPVIN no peer to subscribe case 2 ~n")
                             end
@@ -1003,8 +1041,8 @@ check_subscription() ->
              false ->
                 case ets:member(c1, "peer") of
                    true -> 
-                       lager:error("Subscribing to ~p case4 ~n", lists:nth(1, ets:lookup_element(c1, "peer", 2))),
-                       ets:insert(peer_rates, [{"subscription", lists:nth(1, ets:lookup_element(c1, "peer", 2))}]),
+                       lager:error("Sending Subscription to ~p case4 ~n", lists:nth(1, ets:lookup_element(c1, "peer", 2))),
+                       %ets:insert(peer_rates, [{"subscription", lists:nth(1, ets:lookup_element(c1, "peer", 2))}]),
                        ?SYNC_BACKEND:send(?MODULE, {rate_subscribe, lasp_support:mynode(), ets:lookup_element(peer_rates, "self_rate", 2)}, lists:nth(1, ets:lookup_element(c1, "peer", 2)));
                    false ->
                       case ets:member(find_sub, ets:lookup_element(peer_rates, "self_rate", 2)) of
