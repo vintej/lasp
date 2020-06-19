@@ -70,6 +70,8 @@ extract_log_type_and_payload({find_sub_aq_lock, Id, ToNode, Node}) ->
     [{delta_send_protocol, {Id, ToNode, Node}}];
 extract_log_type_and_payload({check_tonode, ToNode, Hop, Node}) ->
     [{delta_send_protocol, {ToNode, Hop, Node}}];
+extract_log_type_and_payload({check_tonode_ack, ToNode, Act, From}) ->
+    [{delta_send_protocol, {ToNode, Act, From}}];
 extract_log_type_and_payload({sub_cancel, Node, Id, ToNode}) ->
     [{delta_send_protocol, {Node, Id, ToNode}}];
 extract_log_type_and_payload({find_sub_aq_lock_rev, Id, Node}) ->
