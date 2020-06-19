@@ -362,11 +362,11 @@ handle_cast({find_sub_aq_lock, Id, ToNode, From}, #state{store=Store}=State) ->
             lager:error("Deleting this rate_ack after sending updated rate ~p ~n", [ets:tab2list(rate_ack)]),
             lager:error("Rate_ack shown and this are the connections ~p ~n", [get_connections()]),
             lists:foreach(fun(PeerT) ->
-                {Peer} = PeerT,
+                [Peer] = PeerT,
                 lager:error("Sending updated rate ~p to ~p ~n", [ets:lookup_element(peer_rates, "self_rate", 2), Peer]),
                 ?SYNC_BACKEND:send(?MODULE, {rate_class, lasp_support:mynode(), ets:lookup_element(peer_rates, "self_rate", 2)}, Peer),
                 ets:delete(rate_ack, Peer)
-                end, ets:tab2list(rate_ack))
+                end, ets:match(rate_ack, {'$1'}))
     end,
     %ets:delete_object(find_sub, lists:nth(1,ets:match_object(find_sub, {'_', Id, '_'}))),
     {noreply, State};
