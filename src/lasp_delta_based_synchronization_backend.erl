@@ -1247,7 +1247,7 @@ found_sub_aq_lockpath(Id, ToNode, Via, From, Hop) ->
                                                                     timer:sleep(2),
                                                                     case ets:member(peer_rates, "subscription") of
                                                                         true -> 
-                                                                            lager:error("Checking if subscription ~p has path ToNode ~p ~n", [ets:lookup_element(peer_rates, "subscription", 2)]),
+                                                                            lager:error("Checking if subscription ~p has path ToNode ~p ~n", [ets:lookup_element(peer_rates, "subscription", 2), ToNode]),
                                                                             check_with_subscription(ToNode, Hop, Id, Via, From);
                                                                         false ->
                                                                             lager:error("No subscription yet ~p ~n", [ets:tab2list(peer_rates)]),
@@ -1261,7 +1261,7 @@ found_sub_aq_lockpath(Id, ToNode, Via, From, Hop) ->
                                                             timer:sleep(2),
                                                             case ets:member(peer_rates, "subscription") of
                                                                 true ->
-                                                                    lager:error("Checking if subscription ~p has path ToNode ~p ~n", [ets:lookup_element(peer_rates, "subscription", 2)]),
+                                                                    lager:error("Checking if subscription ~p has path ToNode ~p ~n", [ets:lookup_element(peer_rates, "subscription", 2), ToNode]),
                                                                     check_with_subscription(ToNode, Hop, Id, Via, From);
                                                                 false ->
                                                                     lager:error("Path ToNode:~p does not exists in find_sub_aq", [ToNode]),
@@ -1271,7 +1271,7 @@ found_sub_aq_lockpath(Id, ToNode, Via, From, Hop) ->
                                              end;
                                         false -> 
                                             lager:error("ToNode ~p is in connections ~p ~n", [ToNode, get_connections()]),
-                                            lager:error("Subscription must be done already ToNode ~p ~n", [ets:tab2list(c1)])
+                                            lager:error("Subscription must be done already ToNode ~p ~n", [ets:tab2list(peer_rates)])
                                     end;
                                 false ->
                                     case Via==From of
@@ -1361,7 +1361,7 @@ further_checks(Id, ToNode, Via, From, Hop) ->
             lager:error("LASPVIN path ToNode: ~p exists in find_sub_aq: ~p ~n",[ToNode, ets:match_object(find_sub_aq, {'_', '$1', '_', '_'})]),
             case Hop < lists:nth(1,lists:nth(1,ets:match(find_sub_aq, {'_', ToNode, '_', '$1'}))) of
                 true ->
-                    lager:error("Got lower hop checking subscription: ~p", ets:tab2list(peer_rates)),
+                    lager:error("Got lower hop checking subscription: ~p", [ets:tab2list(peer_rates)]),
                     timer:sleep(25000),
                     case ets:member(peer_rates, "subscription") of
                         true ->
@@ -1414,7 +1414,7 @@ further_checks(Id, ToNode, Via, From, Hop) ->
                             timer:sleep(2),
                             case ets:member(peer_rates, "subscription") of
                                 true -> 
-                                    lager:error("Checking if subscription ~p has path ToNode ~p ~n", [ets:lookup_element(peer_rates, "subscription", 2)]),
+                                    lager:error("Checking if subscription ~p has path ToNode ~p ~n", [ets:lookup_element(peer_rates, "subscription", 2), ToNode]),
                                     check_with_subscription(ToNode, Hop, Id, Via, From);
                                 false ->
                                     lager:error("No subscription yet ~p ~n", [ets:tab2list(peer_rates)]),
@@ -1428,7 +1428,7 @@ further_checks(Id, ToNode, Via, From, Hop) ->
                     timer:sleep(2),
                     case ets:member(peer_rates, "subscription") of
                                true -> 
-                                    lager:error("Checking if subscription ~p has path ToNode ~p ~n", [ets:lookup_element(peer_rates, "subscription", 2)]),
+                                    lager:error("Checking if subscription ~p has path ToNode ~p ~n", [ets:lookup_element(peer_rates, "subscription", 2), ToNode]),
                                     check_with_subscription(ToNode, Hop, Id, Via, From);
                                 false ->
                                     lager:error("No subscription yet ~p ~n", [ets:tab2list(peer_rates)]),
