@@ -999,6 +999,7 @@ check_subscription() ->
             case ets:lookup_element(rate_ack, "NoSub", 2) > 60 of
                 true ->
                     ets:delete_all_objects(rate_ack),
+                    ets:delete_all_objects(myconnections),
                     ets:insert(rate_ack, [{"NoSub", 0}]),
                     lists:foreach(fun(Peer) ->
                         ?SYNC_BACKEND:send(?MODULE, {rate_refresh, lasp_support:mynode()}, Peer)
