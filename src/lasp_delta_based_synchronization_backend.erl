@@ -116,7 +116,6 @@ init([Store, Actor]) ->
     ets:new(find_sub_aq, [ named_table, bag, public]),
     ets:new(myconnections, [named_table, bag, public]),
     ets:new(control_batch_find_sub, [named_table, bag, public]),
-    ets:insert(control_batch_find_sub, {"find_subTest", "test", "c1", "test", "test", "test"}),
     ets:new(control_batch_find_sub_aq, [named_table, bag, public]),
     lager:debug("LASPVIN test"),
     %schedule_delta_synchronization(),
