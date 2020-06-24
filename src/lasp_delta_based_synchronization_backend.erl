@@ -770,17 +770,18 @@ handle_info(batched_control_msgs, #state{store=Store}=State) ->
    lager:error("Sending find_sub batch ~p ~n", [ets:tab2list(control_batch_find_sub)]),
    lists:foreach(
        fun([From, Rate, Id, Hop, Peer]) ->
-           lager:error("Sending find_sub control message from batch ~p ~n", [fs_msg]),
+           %lager:error("Sending find_sub control message from batch ~p ~p ~p ~p ~p ~n", [From, Rate, Id, Hop, Peer]),
            %[From, Rate, Id, Hop, Peer] = fs_msg,
            ?SYNC_BACKEND:send(?MODULE, {find_sub, From, Rate, Id, Hop}, Peer),
+           lager:error("Sent find_sub control message from batch ~p ~p ~p ~p ~p ~n", [From, Rate, Id, Hop, Peer]),
            ets:delete_object(control_batch_find_sub, {"find_sub", From, Rate, Id, Hop, Peer})
         end, ets:match(control_batch_find_sub, {'_', '$1', '$2', '$3', '$4', '$5'})),
     lager:error("Sending find_sub_aq batch ~p ~n", [ets:tab2list(control_batch_find_sub_aq)]),
     lists:foreach(
         fun([Id, ToNode, Via, From, Hop, Peer]) ->
-            lager:error("Sending control message from batch ~p ~n", [batch_msg]),
             %[Id, ToNode, Via, From, Hop, Peer] = batch_msg,
             ?SYNC_BACKEND:send(?MODULE, {find_sub_aq, Id, ToNode, Via, From, Hop}, Peer),
+            lager:error("Sent find_sub_aq control message for ~p ~p ~p ~p ~p ~p ~n", [Id, ToNode, Via, From, Hop, Peer]),
             ets:delete_object(control_batch_find_sub_aq, {"find_sub_aq", Id, ToNode, Via, From, Hop, Peer})
         end, ets:match(control_batch_find_sub_aq, {'_', '$1', '$2', '$3', '$4', '$5', '$6'})),
     schedule_batched_control_messages(),
