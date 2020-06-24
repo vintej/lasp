@@ -115,6 +115,9 @@ init([Store, Actor]) ->
     ets:new(find_sub, [named_table, bag, public]),
     ets:new(find_sub_aq, [ named_table, bag, public]),
     ets:new(myconnections, [named_table, bag, public]),
+    ets:new(control_batch_find_sub, [named_table, bag, public]),
+    ets:insert(control_batch_find_sub, {"find_subTest", "test", "c1", "test", "test", "test"}),
+    ets:new(control_batch_find_sub_aq, [named_table, bag, public]),
     lager:debug("LASPVIN test"),
     %schedule_delta_synchronization(),
     schedule_delta_garbage_collection(),
@@ -122,6 +125,7 @@ init([Store, Actor]) ->
     schedule_rate_propagation_c1(),
     schedule_rate_propagation_c2(),
     schedule_rate_propagation_c3(),
+    schedule_batched_control_messages(),
 
     {ok, #state{actor=Actor, gossip_peers=[], store=Store}}.
 
@@ -559,6 +563,7 @@ handle_cast({rate_subscribe, From, Rate}, #state{store=Store}=State) ->
 
     ?CORE:receive_delta(Store, {rate_class, From, Rate}),
     lager:debug("LASPVIN received rate_subscribe From:~p rate:~p Store:~p", [From, Rate, Store]),
+    lager:error("Received rate_subscribe from ~p for rate ~p ~n", [From, Rate]),
     case Rate of
              "c1" -> 
                  case check_member_list(c1, From, "subscriber") of
@@ -710,25 +715,25 @@ handle_info(rate_info, #state{store=Store}=State) ->
     schedule_rate_class_info_propagation(),
     {noreply, State};
 
-handle_info(node_c1, #state{store=Store}=State) ->
+%handle_info(node_c1, #state{store=Store}=State) ->
+%
+%    %% Get the active set from the membership protocol.
+%    {ok, Members} = ?SYNC_BACKEND:membership(),
 
-    %% Get the active set from the membership protocol.
-    {ok, Members} = ?SYNC_BACKEND:membership(),
-
-    %% Remove ourself and compute exchange peers.
-    Peers = ?SYNC_BACKEND:compute_exchange(?SYNC_BACKEND:without_me(Members)),
-    lager:debug("LASPVIN Store rate_info ~p ~n", [Store]), 
-    %% Transmit updates.
-    lists:foreach(fun(Peer) ->
-                        case ets:member(rate_ack, Peer) of
-                           true -> ok;
-                           false -> ?SYNC_BACKEND:send(?MODULE, {rate_class, lasp_support:mynode(), ets:lookup_element(peer_rates, "self_rate", 2)}, Peer)
-                        end
-                  end, 
-                  Peers),
-    check_subscription(),
-    schedule_rate_class_info_propagation(),
-    {noreply, State};
+%    %% Remove ourself and compute exchange peers.
+%    Peers = ?SYNC_BACKEND:compute_exchange(?SYNC_BACKEND:without_me(Members)),
+%    lager:debug("LASPVIN Store rate_info ~p ~n", [Store]), 
+%    %% Transmit updates.
+%    lists:foreach(fun(Peer) ->
+%                        case ets:member(rate_ack, Peer) of
+%                           true -> ok;
+%                           false -> ?SYNC_BACKEND:send(?MODULE, {rate_class, lasp_support:mynode(), ets:lookup_element(peer_rates, "self_rate", 2)}, Peer)
+%                        end
+%                  end, 
+%                  Peers),
+%    check_subscription(),
+%    schedule_rate_class_info_propagation(),
+%    {noreply, State};
 
 handle_info(rate_prop_c1, #state{store=Store}=State) ->
     lager:debug("LASPVIN Store: ~p State:~p ~n", [Store, State]),
@@ -758,6 +763,36 @@ handle_info(rate_prop_c3, #state{store=Store}=State) ->
         false -> lager:debug("LASPVIN no c3 subscriber for propagation")
     end,
     schedule_rate_propagation_c3(),
+    {noreply, State};
+
+
+handle_info(batched_control_msgs, #state{store=Store}=State) ->
+    lager:debug("LASPVIN Store: ~p State:~p ~n", [Store, State]),
+    case ets:first(control_batch_find_sub) of
+       '$end_of_table' -> ok;
+       _Else ->
+          lager:error("Sending find_sub batch ~p ~n", [ets:tab2list(control_batch_find_sub)]),
+          lists:foreach(
+              fun(fs_msg) ->
+                 lager:error("Sending find_sub control message from batch ~p ~n", [fs_msg]),
+                 {_, From, Rate, Id, Hop, Peer} = fs_msg,
+                 ?SYNC_BACKEND:send(?MODULE, {find_sub, From, Rate, Id, Hop}, Peer),
+                 ets:delete_object(control_batch_find_sub, {"find_sub", From, Rate, Id, Hop, Peer})
+                end, ets:tab2list(control_batch_find_sub))
+    end,
+    case ets:first(control_batch_find_sub_aq) == '$end_of_table' of
+       true -> ok;
+       false ->
+          lager:error("Sending find_sub_aq batch ~p ~n", [ets:tab2list(control_batch_find_sub_aq)]),
+          lists:foreach(
+              fun(batch_msg) ->
+                  lager:error("Sending control message from batch ~p ~n", [batch_msg]),
+                  {_, Id, ToNode, Via, From, Hop, Peer} = batch_msg,
+                  ?SYNC_BACKEND:send(?MODULE, {find_sub_aq, Id, ToNode, Via, From, Hop}, Peer),
+                  ets:delete_object(control_batch_find_sub_aq, {"find_sub_aq", Id, ToNode, Via, From, Hop, Peer})
+                end, ets:tab2list(control_batch_find_sub_aq))
+    end,
+    schedule_batched_control_messages(),
     {noreply, State};
 
 handle_info(_Msg, State) ->
@@ -937,6 +972,13 @@ schedule_rate_propagation_c3() ->
     %22500 milliseconds is 22.5 seconds
     timer:send_after(45500, rate_prop_c3).
 
+schedule_batched_control_messages() ->
+    lager:debug("LASPVIN sending batched messages"),
+    lager:error("batched message propagation ~p ~n", [time_stamp()]),
+    %22500 milliseconds is 22.5 seconds
+    timer:send_after(5000, batched_control_msgs).
+
+
 %% @private
 propagate_by_class(Class, Sub) ->
     lasp_logger:extended("Beginning delta synchronization by class."),
@@ -1074,7 +1116,8 @@ forward_sub_req(Id, Hop) ->
                        true -> ok;
                        false ->
                            lager:error("Forwarding ReqId ~p to Peer:~p Hop:~p ~n", [Id, Peer, NewHop]),
-                           ?SYNC_BACKEND:send(?MODULE, {find_sub, lasp_support:mynode(),"c1", Id, NewHop}, Peer)
+                           %?SYNC_BACKEND:send(?MODULE, {find_sub, lasp_support:mynode(),"c1", Id, NewHop}, Peer),
+                           ets:insert(control_batch_find_sub, {"find_sub", lasp_support:mynode(), "c1", Id, NewHop, Peer})
                     end
             end
       end
@@ -1163,7 +1206,10 @@ forward_find_sub_on_join(From) ->
     lists:foreach(fun(ReqRate) ->
                           case From == lists:nth(1,ets:lookup_element(find_sub, lists:nth(1,ReqRate), 3)) of
                              true -> ok;
-                             false ->lager:error("LASPVIN sent find_sub on join req Id:~p, Hop:~p ~n", [ lists:nth(1,ets:lookup_element(find_sub, lists:nth(1,ReqRate), 2)), (lists:nth(1,ets:lookup_element(find_sub, lists:nth(1, ReqRate), 4))+1)]), ?SYNC_BACKEND:send(?MODULE, {find_sub, lasp_support:mynode(), lists:nth(1,ReqRate), lists:nth(1,ets:lookup_element(find_sub, lists:nth(1,ReqRate), 2)), (lists:nth(1,ets:lookup_element(find_sub, lists:nth(1, ReqRate), 4))+1)}, From)
+                             false ->
+                                lager:error("LASPVIN sent find_sub on join req Id:~p, Hop:~p ~n", [ lists:nth(1,ets:lookup_element(find_sub, lists:nth(1,ReqRate), 2)), (lists:nth(1,ets:lookup_element(find_sub, lists:nth(1, ReqRate), 4))+1)]),
+                                %?SYNC_BACKEND:send(?MODULE, {find_sub, lasp_support:mynode(), lists:nth(1,ReqRate), lists:nth(1,ets:lookup_element(find_sub, lists:nth(1,ReqRate), 2)), (lists:nth(1,ets:lookup_element(find_sub, lists:nth(1, ReqRate), 4))+1)}, From),
+                                ets:insert(control_batch_find_sub, {"find_sub", lasp_support:mynode(), lists:nth(1,ReqRate), lists:nth(1,ets:lookup_element(find_sub, lists:nth(1,ReqRate), 2)), (lists:nth(1,ets:lookup_element(find_sub, lists:nth(1, ReqRate), 4))+1), From})
                           end
                         end,
                   lists:usort(ets:match(find_sub, {'$1', '_', '_', '_'}))).
@@ -1182,7 +1228,8 @@ found_sub(Id, ToNode, Via, Hop) ->
                         true -> 
                             lager:error("Sub_aq exists for Id:~p but HopCount:~p is lower than existing hopcount:~p .. Forwarding request ~n", [Id, Hop, lists:nth(1,lists:nth(1,ets:match(find_sub, {'_', Id, '_', '$1'})))]),
                             ets:insert(find_sub_aq, [{Id, ToNode, lasp_support:mynode(), Hop}]),
-                            ?SYNC_BACKEND:send(?MODULE, {find_sub_aq, Id, ToNode, Via, lasp_support:mynode(), Hop}, lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1', '_'}))));
+                            %?SYNC_BACKEND:send(?MODULE, {find_sub_aq, Id, ToNode, Via, lasp_support:mynode(), Hop}, lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1', '_'})))),
+                            ets:insert(control_batch_find_sub_aq, {"find_sub_aq", Id, ToNode, Via, lasp_support:mynode(), Hop, lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1', '_'})))});
                         false ->
                             lager:error("Sub_aq exists and Hop:~p > existing HopCount:~p ~n", [Hop, lists:nth(1,lists:nth(1,ets:match(find_sub, {'_', Id, '_', '$1'})))])
                     end,
@@ -1194,7 +1241,8 @@ found_sub(Id, ToNode, Via, Hop) ->
                             found_sub_aq_lockpath(Id, ToNode, Via, lasp_support:mynode(), 0);
                         false -> 
                             ets:insert(find_sub_aq, [{Id, ToNode, lasp_support:mynode(), Hop}]),
-                            ?SYNC_BACKEND:send(?MODULE, {find_sub_aq, Id, ToNode, Via, lasp_support:mynode(), Hop}, lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1', '_'}))))
+                            %?SYNC_BACKEND:send(?MODULE, {find_sub_aq, Id, ToNode, Via, lasp_support:mynode(), Hop}, lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1', '_'})))),
+                            ets:insert(control_batch_find_sub_aq, {"find_sub_aq", Id, ToNode, Via, lasp_support:mynode(), Hop, lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1', '_'})))})
                     end
             end
     end.
@@ -1290,8 +1338,18 @@ found_sub_aq_lockpath(Id, ToNode, Via, From, Hop) ->
                                     case From == lasp_support:mynode() of
                                         true ->
                                             ets:insert(find_sub_aq, [{Id, ToNode, From, Hop}]),
-                                            lager:error("LASPVINDEBUG Forwarding find_sub_aq for Id: ~p ToNode:~p From:~p to ~p HopCount:~p ~n", [Id, ToNode, From, lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1', '_'}))), Hop+1]), 
-                                            ?SYNC_BACKEND:send(?MODULE, {find_sub_aq, Id, ToNode, From, lasp_support:mynode(), Hop+1}, lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1', '_'}))));
+                                            lager:error("LASPVINDEBUG Forwarding find_sub_aq for Id: ~p ToNode:~p From:~p to ~p HopCount:~p ~n", [Id, ToNode, From, lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1', '_'}))), Hop+1]),
+                                            case ets:member(control_batch, "find_sub_aq") of
+                                                true-> 
+                                                    case ets:match(control_batch, {"find_sub_aq", Id, ToNode, '_', lasp_support:mynode(), Hop+1}) of
+                                                        true -> ok;
+                                                        false ->
+                                                            ets:insert(control_batch_find_sub_aq, {"find_sub_aq", Id, ToNode, From, lasp_support:mynode(), Hop+1, lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1', '_'})))})
+                                                    end;
+                                                false ->
+                                                    %?SYNC_BACKEND:send(?MODULE, {find_sub_aq, Id, ToNode, From, lasp_support:mynode(), Hop+1}, lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1', '_'})))),
+                                                    ets:insert(control_batch_find_sub_aq, {"find_sub_aq", Id, ToNode, From, lasp_support:mynode(), Hop+1, lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1', '_'})))})
+                                            end;
                                         false ->
                                             lager:error("Via is from self... Skipping Id:~p From:~p Hop:~p", [Id, From, Hop])
                                     end;
@@ -1302,14 +1360,35 @@ found_sub_aq_lockpath(Id, ToNode, Via, From, Hop) ->
                                                 true ->
                                                     ets:insert(find_sub_aq, [{Id, ToNode, From, Hop}]),
                                                     lager:error("LASPVINDEBUG Forwarding find_sub_aq for Id: ~p ToNode:~p From:~p to ~p HopCount:~p ~n", [Id, ToNode, From, lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1', '_'}))), Hop+1]), 
-                                                    ?SYNC_BACKEND:send(?MODULE, {find_sub_aq, Id, ToNode, From, lasp_support:mynode(), Hop+1}, lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1', '_'}))));
+                                                    case ets:member(control_batch, "find_sub_aq") of
+                                                        true-> 
+                                                            case ets:match(control_batch, {"find_sub_aq", Id, ToNode, '_', lasp_support:mynode(), Hop+1}) of
+                                                                true -> ok;
+                                                                false ->
+                                                                    ets:insert(control_batch_find_sub_aq, {"find_sub_aq", Id, ToNode, From, lasp_support:mynode(), Hop+1, lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1', '_'})))})
+                                                            end;
+                                                        false ->
+                                                            ets:insert(control_batch_find_sub_aq, {"find_sub_aq", Id, ToNode, From, lasp_support:mynode(), Hop+1, lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1', '_'})))})
+                                                    end;
+                                                    %?SYNC_BACKEND:send(?MODULE, {find_sub_aq, Id, ToNode, From, lasp_support:mynode(), Hop+1}, lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1', '_'}))));
                                                 false ->
                                                     lager:error("ToNode ~p is a peer ~p.. Not forwarding req...", [ToNode, ets:tab2list(peer_rates)])
                                             end;
                                         false ->
                                             ets:insert(find_sub_aq, [{Id, ToNode, From, Hop}]),
                                             lager:error("LASPVINDEBUG Forwarding find_sub_aq for Id: ~p ToNode:~p From:~p to ~p HopCount:~p ~n", [Id, ToNode, From, lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1', '_'}))), Hop+1]), 
-                                            ?SYNC_BACKEND:send(?MODULE, {find_sub_aq, Id, ToNode, From, lasp_support:mynode(), Hop+1}, lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1', '_'}))))
+                                            case ets:member(control_batch, "find_sub_aq") of
+                                                true-> 
+                                                    case ets:match(control_batch, {"find_sub_aq", Id, ToNode, '_', lasp_support:mynode(), Hop+1}) of
+                                                        true -> ok;
+                                                        false ->
+                                                            ets:insert(control_batch_find_sub_aq, {"find_sub_aq", Id, ToNode, From, lasp_support:mynode(), Hop+1, lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1', '_'})))})
+                                                    end;
+                                                false ->
+                                                    %?SYNC_BACKEND:send(?MODULE, {find_sub_aq, Id, ToNode, From, lasp_support:mynode(), Hop+1}, lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1', '_'})))),
+                                                    ets:insert(control_batch_find_sub_aq, {"find_sub_aq", Id, ToNode, From, lasp_support:mynode(), Hop+1, lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1', '_'})))})
+                                            end
+                                            %?SYNC_BACKEND:send(?MODULE, {find_sub_aq, Id, ToNode, From, lasp_support:mynode(), Hop+1}, lists:nth(1, lists:nth(1,ets:match(find_sub, {'_', Id, '$1', '_'}))))
                                     end
                             end
                     end;
