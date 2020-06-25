@@ -68,8 +68,8 @@ extract_log_type_and_payload({rate_refresh, Node}) ->
     [{delta_send_protocol, {Node}}];
 extract_log_type_and_payload({find_sub, Node, Rate, Id, Hop}) ->
     [{delta_send_protocol, {Node, Rate, Id, Hop}}];
-extract_log_type_and_payload({find_sub_aq, Id, ToNode, ViaNode, Node, Hop}) ->
-    [{delta_send_protocol, {Id, ToNode, ViaNode, Node, Hop}}];
+extract_log_type_and_payload({find_sub_aq, Id, ToNodes, ViaNode, Node, Hop}) ->
+    [{delta_send_protocol, {Id, ToNodes, ViaNode, Node, Hop}}];
 extract_log_type_and_payload({find_sub_aq_lock, Id, ToNode, Node}) ->
     [{delta_send_protocol, {Id, ToNode, Node}}];
 extract_log_type_and_payload({check_tonode, ToNode, Hop, Node}) ->
@@ -270,93 +270,19 @@ handle_cast({delta_ack, From, Id, Counter}, #state{store=Store}=State) ->
     {noreply, State};
 
 
-handle_cast({find_sub_aq, Id, ToNode, Via, From, Hop}, #state{store=Store}=State) ->
+handle_cast({find_sub_aq, Id, ToNodes, Via, From, Hop}, #state{store=Store}=State) ->
     lasp_marathon_simulations:log_message_queue_size("find_sub_aq"),
     lager:debug("LASPVIN Store ~p ~n",[Store]),
-    lager:error("LASPVIN received find_sub_aq for Id:~p ToNode:~p Via:~p From:~p HopCount:~p ~n", [Id, ToNode, Via, From, Hop]),
+    lager:error("LASPVIN received find_sub_aq for Id:~p ToNodes:~p Via:~p From:~p HopCount:~p ~n", [Id, ToNodes, Via, From, Hop]),
     ets:update_counter(msg_counter, "find_sub_aq", {3, 1}),
     lager:debug("At receving find_sub_aq for Id ~p, find_sub_aq:~p ~n", [Id, ets:tab2list(find_sub_aq)]),
-    case ToNode == lasp_support:mynode() of
-        true -> lager:error("Discarding as I am the ToNode for Id ~p ~n ",[Id]);
-        false ->
-            case ets:member(find_sub_aq, Id) of
-                true ->
-                    case ets:member(peer_rates, ToNode) of
-                        true -> 
-                            case From==Via of
-                                true ->
-                                    case lists:member([ToNode], ets:match(find_sub_aq, {'_', '$1', '_', '_'})) of
-                                        true -> 
-                                            lager:error("LASPVIN path ToNode: ~p exists find_sub_aq:~p ~n",[ToNode, ets:match(find_sub_aq, {'_', ToNode, '_', '$1'})]),
-                                            case Hop < lists:nth(1,lists:nth(1,ets:match(find_sub_aq, {'_', ToNode, '_', '$1'}))) of
-                                                true ->
-                                                    lager:error("Got new path for a peer with lower hopcount ~p ToNode ~p  From ~p for Id ~p Via ~p ~n", [Hop, ToNode, From, Id, Via]),
-                                                    case From==ToNode of
-                                                        true ->
-                                                            lager:error("From==ToNode so forwarding lower hopcount ~p ToNode ~p  From ~p for Id ~p Via ~p ~n", [Hop, ToNode, From, Id, Via]),
-                                                            found_sub_aq_lockpath(Id, ToNode, Via, From, Hop);
-                                                        false -> ok
-                                                    end,
-                                                    lager:debug("Lower hopcount connection status ~p ~n", [get_connections()]),
-                                                    lager:debug("Lower hopcount members status ~p ~n", [get_peers()]);
-                                                    %found_sub_aq_lockpath(Id, ToNode, Via, From, Hop);
-                                                    %lockpath_unlock(Id),
-                                                    %ets:delete(find_sub_aq, lists:nth(1,ets:match_object(find_sub_aq, {Id,'_', '_', '_' }))),
-                                                    %found_sub_aq_lockpath(Id, ToNode, Via, From, Hop);
-                                                false ->
-                                                    lager:error("HopCount is more than existing, skipping.....")
-                                            end;
-                                        false -> 
-                                            found_sub_aq_lockpath(Id, ToNode, Via, From, Hop)
-                                    end;
-                                false -> 
-                                    case ets:member(peer_rates, Via) of
-                                        true ->
-                                            lager:debug("LASPVIN ToNode ~p and Via are Peers.. Can send Acklock directly to ToNode (Id:~p , ToNode:~p, Via:~p, From:~p) ~n", [ToNode, Id, ToNode, Via, Via]),
-                                            found_sub_aq_lockpath(Id, ToNode, Via, From, Hop),
-                                            ok;
-                                        false ->
-                                            lager:error("Via not in peers, and ToNode is in peer, Not sending lock expecting ToNode to get back as to node is in peer_rates, connections:~p ~n", [get_connections()])
-                                    end
-                            end;
-                        false ->
-                            %Change this to if psudopeer exists, and add psudopeer in found_sub_aq_lockpath
-                            case lists:member([ToNode], ets:match(find_sub_aq, {'_', '$1', '_', '_'})) of
-                                true -> 
-                                    lager:error("LASPVIN path ToNode: ~p exists ~p ~n",[ToNode, ets:match(find_sub_aq, {'_', '$1', '_', '_'})]),
-                                    case Hop < lists:nth(1,lists:nth(1, ets:match(find_sub_aq, {'_', ToNode, '_', '$1'}))) of
-                                        true ->
-                                            lager:error("Got new path with lower hopcount ~p ToNode ~p  From ~p for Id ~p Via ~p ~n", [Hop, ToNode, From, Id, Via]),
-                                            lager:debug("Lower hopcount connection status ~p ~n", [get_connections()]),
-                                            lager:debug("Lower hopcount members status ~p ~n", [get_peers()]),
-                                            found_sub_aq_lockpath(Id, ToNode, Via, From, Hop);
-                                            %lockpath_unlock(Id),
-                                            %ets:delete(find_sub_aq, lists:nth(1,ets:match_object(find_sub_aq, {Id,'_', '_', '_' }))),
-                                            %found_sub_aq_lockpath(Id, ToNode, Via, From, Hop);
-                                        false ->
-                                            lager:error("HopCount is more than existing, skipping.....")
-                                    end;
-                                false -> found_sub_aq_lockpath(Id, ToNode, Via, From, Hop)
-                            end
-                            %case ets:member(c1, "pseudopeer") of
-                            %    true -> 
-                            %        %case lists:member(ToNode, ets:lookup_element(c1, "pseudopeer", 2)) of
-                            %        case lists:member([ToNode], ets:match(find_sub_aq, {'_', '$1', '_'})) of
-                            %            true -> lager:debug("LASPVIN path ToNode: ~p exists ~n",[ToNode]);
-                            %            false -> found_sub_aq_lockpath(Id, ToNode, From)
-                            %        end;
-                            %    false -> found_sub_aq_lockpath(Id, ToNode, From)
-                            %end
-                    end;
-                false ->
-                    found_sub_aq_lockpath(Id, ToNode, Via, From, Hop)
-            end
-    end,
+    lists:foreach(fun(ToNode) -> check_phase1(Id, ToNode, Via, From, Hop) end, ToNodes),
     {noreply, State};
 
 handle_cast({find_sub_aq_lock, Id, ToNode, From}, #state{store=Store}=State) ->
     lasp_marathon_simulations:log_message_queue_size("find_sub_aq_lock"),
     lager:debug("LASPVIN Store ~p ~n",[Store]),
+    ets:update_counter(msg_counter, "find_sub_aq_lock", {3, 1}),
     lager:error("LASPVIN received find_sub_aq_lock for Id:~p ToNode~p From:~p ~n", [Id, ToNode, From]),
     ets:update_counter(msg_counter, "find_sub_aq_lock", {3, 1}),
     case ets:lookup_element(peer_rates, "self_rate", 2)==lists:nth(1,lists:nth(1,ets:match(find_sub, {'$1',Id, '_', '_' }))) of
@@ -440,6 +366,7 @@ handle_cast({find_sub, From, ReqRate, Id, Hop}, #state{store=Store}=State) ->
 handle_cast({rate_ack, From, Rate}, #state{store=Store}=State) ->
     lasp_marathon_simulations:log_message_queue_size("rate_ack"),
     lager:debug("LASPVIN received ack from ~p Store ~p ~n", [From, Store]),
+    ets:update_counter(msg_counter, "rate_ack", {3, 1}),
     case Rate ==  ets:lookup_element(peer_rates, "self_rate", 2) of
        true -> ets:insert(rate_ack, [{From}]), ets:insert(myconnections, [{"connect",From}]);
        false -> ok
@@ -562,6 +489,7 @@ handle_cast({rate_class, From, Rate}, #state{store=Store}=State) ->
     lager:debug("LASPVIN c2 list: ~p ~n", [ets:tab2list(c2)]),
     lager:debug("LASPVIN c3 list: ~p ~n", [ets:tab2list(c3)]),
     ?SYNC_BACKEND:send(?MODULE, {rate_ack, lasp_support:mynode(), Rate}, From),
+    ets:update_counter(msg_counter, "rate_ack", {2, 1}),
     case ets:first(find_sub) of
        '$end_of_table' -> ok;
        _Else ->
@@ -804,13 +732,15 @@ handle_info(batched_control_msgs, #state{store=Store}=State) ->
         end, ets:match(control_batch_find_sub, {'$1', '$2', '$3', '$4', '$5'})),
     lager:error("Sending find_sub_aq batch ~p ~n", [ets:tab2list(control_batch_find_sub_aq)]),
     lists:foreach(
-        fun([Id, ToNode, Via, From, Hop, Peer]) ->
+        fun([Id, Via, From, Hop, Peer]) ->
             %[Id, ToNode, Via, From, Hop, Peer] = batch_msg,
-            ?SYNC_BACKEND:send(?MODULE, {find_sub_aq, Id, ToNode, Via, From, Hop}, Peer),
+            ToNodes = lists:flatten(ets:match(control_batch_find_sub_aq, {Id, '$1', Via, From, Hop, Peer})),
+            ?SYNC_BACKEND:send(?MODULE, {find_sub_aq, Id, ToNodes, Via, From, Hop}, Peer),
             ets:update_counter(msg_counter, "find_sub_aq", {2, 1}),
-            lager:error("Sent find_sub_aq control message for ~p ~p ~p ~p ~p ~p ~n", [Id, ToNode, Via, From, Hop, Peer]),
-            ets:delete_object(control_batch_find_sub_aq, {Id, ToNode, Via, From, Hop, Peer})
-        end, ets:match(control_batch_find_sub_aq, {'$1', '$2', '$3', '$4', '$5', '$6'})),
+            lager:error("Sent find_sub_aq control message for ~p ~p ~p ~p ~p ~p ~n", [Id, ToNodes, Via, From, Hop, Peer]),
+            lists:foreach( fun(ToNode) -> ets:delete_object(control_batch_find_sub_aq, {Id, ToNode, Via, From, Hop, Peer}) end, ToNodes)            
+        end, lists:usort(ets:match(control_batch_find_sub_aq, {'$1', '_', '$2', '$3', '$4', '$5'}))),
+    %ets:match(control_batch_find_sub_aq, {'$1', '$2', '$3', '$4', '$5', '$6'})),
     schedule_batched_control_messages(),
     {noreply, State};
 
@@ -879,6 +809,85 @@ schedule_delta_synchronization() ->
 
 get_members(ListToGet) ->
     ets:tab2list(ListToGet).
+
+%% @private
+check_phase1(Id, ToNode, Via, From, Hop) ->
+    case ToNode == lasp_support:mynode() of
+        true -> lager:error("Discarding as I am the ToNode for Id ~p ~n ",[Id]);
+        false ->
+            case ets:member(find_sub_aq, Id) of
+                true ->
+                    case ets:member(peer_rates, ToNode) of
+                        true -> 
+                            case From==Via of
+                                true ->
+                                    case lists:member([ToNode], ets:match(find_sub_aq, {'_', '$1', '_', '_'})) of
+                                        true -> 
+                                            lager:error("LASPVIN path ToNode: ~p exists find_sub_aq:~p ~n",[ToNode, ets:match(find_sub_aq, {'_', ToNode, '_', '$1'})]),
+                                            case Hop < lists:nth(1,lists:nth(1,ets:match(find_sub_aq, {'_', ToNode, '_', '$1'}))) of
+                                                true ->
+                                                    lager:error("Got new path for a peer with lower hopcount ~p ToNode ~p  From ~p for Id ~p Via ~p ~n", [Hop, ToNode, From, Id, Via]),
+                                                    case From==ToNode of
+                                                        true ->
+                                                            lager:error("From==ToNode so forwarding lower hopcount ~p ToNode ~p  From ~p for Id ~p Via ~p ~n", [Hop, ToNode, From, Id, Via]),
+                                                            found_sub_aq_lockpath(Id, ToNode, Via, From, Hop);
+                                                        false -> ok
+                                                    end,
+                                                    lager:debug("Lower hopcount connection status ~p ~n", [get_connections()]),
+                                                    lager:debug("Lower hopcount members status ~p ~n", [get_peers()]);
+                                                    %found_sub_aq_lockpath(Id, ToNode, Via, From, Hop);
+                                                    %lockpath_unlock(Id),
+                                                    %ets:delete(find_sub_aq, lists:nth(1,ets:match_object(find_sub_aq, {Id,'_', '_', '_' }))),
+                                                    %found_sub_aq_lockpath(Id, ToNode, Via, From, Hop);
+                                                false ->
+                                                    lager:error("HopCount is more than existing, skipping.....")
+                                            end;
+                                        false -> 
+                                            found_sub_aq_lockpath(Id, ToNode, Via, From, Hop)
+                                    end;
+                                false -> 
+                                    case ets:member(peer_rates, Via) of
+                                        true ->
+                                            lager:debug("LASPVIN ToNode ~p and Via are Peers.. Can send Acklock directly to ToNode (Id:~p , ToNode:~p, Via:~p, From:~p) ~n", [ToNode, Id, ToNode, Via, Via]),
+                                            found_sub_aq_lockpath(Id, ToNode, Via, From, Hop),
+                                            ok;
+                                        false ->
+                                            lager:error("Via not in peers, and ToNode is in peer, Not sending lock expecting ToNode to get back as to node is in peer_rates, connections:~p ~n", [get_connections()])
+                                    end
+                            end;
+                        false ->
+                            %Change this to if psudopeer exists, and add psudopeer in found_sub_aq_lockpath
+                            case lists:member([ToNode], ets:match(find_sub_aq, {'_', '$1', '_', '_'})) of
+                                true -> 
+                                    lager:error("LASPVIN path ToNode: ~p exists ~p ~n",[ToNode, ets:match(find_sub_aq, {'_', '$1', '_', '_'})]),
+                                    case Hop < lists:nth(1,lists:nth(1, ets:match(find_sub_aq, {'_', ToNode, '_', '$1'}))) of
+                                        true ->
+                                            lager:error("Got new path with lower hopcount ~p ToNode ~p  From ~p for Id ~p Via ~p ~n", [Hop, ToNode, From, Id, Via]),
+                                            lager:debug("Lower hopcount connection status ~p ~n", [get_connections()]),
+                                            lager:debug("Lower hopcount members status ~p ~n", [get_peers()]),
+                                            found_sub_aq_lockpath(Id, ToNode, Via, From, Hop);
+                                            %lockpath_unlock(Id),
+                                            %ets:delete(find_sub_aq, lists:nth(1,ets:match_object(find_sub_aq, {Id,'_', '_', '_' }))),
+                                            %found_sub_aq_lockpath(Id, ToNode, Via, From, Hop);
+                                        false ->
+                                            lager:error("HopCount is more than existing, skipping.....")
+                                    end;
+                                false -> found_sub_aq_lockpath(Id, ToNode, Via, From, Hop)
+                            end
+                            %case ets:member(c1, "pseudopeer") of
+                            %    true -> 
+                            %        %case lists:member(ToNode, ets:lookup_element(c1, "pseudopeer", 2)) of
+                            %        case lists:member([ToNode], ets:match(find_sub_aq, {'_', '$1', '_'})) of
+                            %            true -> lager:debug("LASPVIN path ToNode: ~p exists ~n",[ToNode]);
+                            %            false -> found_sub_aq_lockpath(Id, ToNode, From)
+                            %        end;
+                            %    false -> found_sub_aq_lockpath(Id, ToNode, From)
+                            %end
+                    end;
+                false ->
+                    found_sub_aq_lockpath(Id, ToNode, Via, From, Hop)
+            end
+    end.
 
 %% @private
 insert_findSub(ReqRate, Id, From, Hop)->
@@ -1566,6 +1575,7 @@ forward_aq_lock_rev(Id) ->
                 false ->
                     %pass on the lock & delete find_sub_aq entry
                     lager:error("LASPVIN Forwarding lock rev for ID:~p to ~p ~n", [Id, lists:nth(1,lists:nth(1,ets:match(find_sub, {'_', Id, '$1', '_'})))]),
+                    ets:update_counter(msg_counter, "find_sub_aq_lock", {2, 1}),
                     ?SYNC_BACKEND:send(?MODULE, {find_sub_aq_lock_rev, Id, lasp_support:mynode()},lists:nth(1,lists:nth(1,ets:match(find_sub, {'_', Id, '$1', '_'}))))
                     %ets:delete(find_sub_aq, Id)
     end.
