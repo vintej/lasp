@@ -242,6 +242,7 @@ handle_cast({delta_send, From, {Id, Type, _Metadata, Deltas}, Counter},
     lasp_logger:extended("Receiving delta took: ~p microseconds.", [Time]),
     lager:error("LASPVIN Received delta From=~p at TimeStamp=~p Took=~p microseconds ~n", [From, time_stamp(), Time]),
     ets:update_counter(msg_counter, "delta_send", {3, 1}),
+    lager:error("Message Counters ~p ~n", [ets:tab2list(msg_counter)]),
 
     %% Acknowledge message.
     ?SYNC_BACKEND:send(?MODULE, {delta_ack, lasp_support:mynode(), Id, Counter}, From),
