@@ -106,7 +106,7 @@ init([Store, Actor]) ->
     ets:new(peer_rates, [ordered_set, named_table, public]),
     ets:insert(peer_rates, [{"self_rate", os:getenv("RATE_CLASS", "c1")}]),
     ets:new(msg_counter, [ordered_set, named_table, public]),
-    ets:insert(msg_counter, [{"delta_send", 0, 0}, {"delta_ack", 0, 0}, {"rate_class", 0, 0}, {"rate_ack", 0, 0}, {"rate_subscribe", 0, 0}, {"rate_subscribe_ack", 0, 0} 
+    ets:insert(msg_counter, [{"Message", "Tx", "Rx"},{"delta_send", 0, 0}, {"delta_ack", 0, 0}, {"rate_class", 0, 0}, {"rate_ack", 0, 0}, {"rate_subscribe", 0, 0}, {"rate_subscribe_ack", 0, 0} 
         , {"rate_refresh", 0, 0}, {"find_sub", 0, 0}, {"find_sub_aq", 0, 0}, {"find_sub_aq_lock", 0, 0}, {"check_tonode", 0, 0}, {"check_tonode_ack", 0, 0}, {"sub_cancel", 0, 0}]),
     ets:new(rate_ack, [named_table, ordered_set, public]),
     ets:insert(rate_ack, [{"NoSub", 0}]),
