@@ -105,6 +105,9 @@ init([Store, Actor]) ->
     
     ets:new(peer_rates, [ordered_set, named_table, public]),
     ets:insert(peer_rates, [{"self_rate", os:getenv("RATE_CLASS", "c1")}]),
+    ets:new(msg_counter, [ordered_set, named_table, public]),
+    ets:insert(msg_counter, [{"delta_send", 0, 0}, {"delta_ack", 0, 0}, {"rate_class", 0, 0}, {"rate_ack", 0, 0}, {"rate_subscribe", 0, 0}, {"rate_subscribe_ack", 0, 0} 
+        , {"rate_refresh", 0, 0}, {"find_sub", 0, 0}, {"find_sub_aq", 0, 0}, {"find_sub_aq_lock", 0, 0}, {"check_tonode", 0, 0}, {"check_tonode_ack", 0, 0}, {"sub_cancel", 0, 0}]),
     ets:new(rate_ack, [named_table, ordered_set, public]),
     ets:insert(rate_ack, [{"NoSub", 0}]),
     ets:new(temp_tonode, [ordered_set, named_table, public]),
@@ -191,6 +194,7 @@ handle_cast({delta_exchange, Peer, ObjectFilterFun},
                     true ->
                         lager:debug("LASPVIN Ackmap True sending now ~n"),
                         lager:error("LASPVIN Sending delta to ~p ~n", [Peer]),
+                        ets:update_counter(msg_counter, "delta_send", {2, 1}),
                         ?SYNC_BACKEND:send(?MODULE, {delta_send, lasp_support:mynode(), {Id, Type, Metadata, Deltas}, Counter}, Peer),
 
                         orddict:map(
@@ -237,9 +241,11 @@ handle_cast({delta_send, From, {Id, Type, _Metadata, Deltas}, Counter},
              end),
     lasp_logger:extended("Receiving delta took: ~p microseconds.", [Time]),
     lager:error("LASPVIN Received delta From=~p at TimeStamp=~p Took=~p microseconds ~n", [From, time_stamp(), Time]),
+    ets:update_counter(msg_counter, "delta_send", {3, 1}),
 
     %% Acknowledge message.
     ?SYNC_BACKEND:send(?MODULE, {delta_ack, lasp_support:mynode(), Id, Counter}, From),
+    ets:update_counter(msg_counter, "delta_ack", {2, 1}),
 
     %% Send back just the updated state for the object received.
     case ?SYNC_BACKEND:client_server_mode() andalso
@@ -257,6 +263,7 @@ handle_cast({delta_send, From, {Id, Type, _Metadata, Deltas}, Counter},
 
 handle_cast({delta_ack, From, Id, Counter}, #state{store=Store}=State) ->
     lasp_marathon_simulations:log_message_queue_size("delta_ack"),
+    ets:update_counter(msg_counter, "delta_ack", {3, 1}),
 
     ?CORE:receive_delta(Store, {delta_ack, Id, From, Counter}),
     {noreply, State};
@@ -266,6 +273,7 @@ handle_cast({find_sub_aq, Id, ToNode, Via, From, Hop}, #state{store=Store}=State
     lasp_marathon_simulations:log_message_queue_size("find_sub_aq"),
     lager:debug("LASPVIN Store ~p ~n",[Store]),
     lager:error("LASPVIN received find_sub_aq for Id:~p ToNode:~p Via:~p From:~p HopCount:~p ~n", [Id, ToNode, Via, From, Hop]),
+    ets:update_counter(msg_counter, "find_sub_aq", {3, 1}),
     lager:debug("At receving find_sub_aq for Id ~p, find_sub_aq:~p ~n", [Id, ets:tab2list(find_sub_aq)]),
     case ToNode == lasp_support:mynode() of
         true -> lager:error("Discarding as I am the ToNode for Id ~p ~n ",[Id]);
@@ -349,6 +357,7 @@ handle_cast({find_sub_aq_lock, Id, ToNode, From}, #state{store=Store}=State) ->
     lasp_marathon_simulations:log_message_queue_size("find_sub_aq_lock"),
     lager:debug("LASPVIN Store ~p ~n",[Store]),
     lager:error("LASPVIN received find_sub_aq_lock for Id:~p ToNode~p From:~p ~n", [Id, ToNode, From]),
+    ets:update_counter(msg_counter, "find_sub_aq_lock", {3, 1}),
     case ets:lookup_element(peer_rates, "self_rate", 2)==lists:nth(1,lists:nth(1,ets:match(find_sub, {'$1',Id, '_', '_' }))) of
         true ->
             lager:error("LASPVIN Rate updated already ~n"),
@@ -368,6 +377,7 @@ handle_cast({find_sub_aq_lock, Id, ToNode, From}, #state{store=Store}=State) ->
                 [Peer] = PeerT,
                 lager:error("Sending updated rate ~p to ~p ~n", [ets:lookup_element(peer_rates, "self_rate", 2), Peer]),
                 ?SYNC_BACKEND:send(?MODULE, {rate_class, lasp_support:mynode(), ets:lookup_element(peer_rates, "self_rate", 2)}, Peer),
+                ets:update_counter(msg_counter, "rate_class", {2, 1}),
                 ets:delete(rate_ack, Peer)
                 end, ets:match(rate_ack, {'$1'}))
     end,
@@ -399,6 +409,7 @@ handle_cast({find_sub, From, ReqRate, Id, Hop}, #state{store=Store}=State) ->
     lasp_marathon_simulations:log_message_queue_size("find_sub"),
     lager:debug("LASPVIN store:~p ~n", [Store]),
     lager:error("LASPVIN received find_sub Id: ~p From: ~p Hop:~p ~n", [Id, From, Hop]),
+    ets:update_counter(msg_counter, "find_sub", {3, 1}),
     lager:debug("At receiving Id ~p find_sub: ~p ~n", [Id, ets:tab2list(find_sub)]),
     case ets:member(find_sub_aq, Id) of
         true ->
@@ -437,17 +448,21 @@ handle_cast({rate_ack, From, Rate}, #state{store=Store}=State) ->
 handle_cast({check_tonode, ToNode, Hop, From}, #state{store=Store}=State) ->
     lasp_marathon_simulations:log_message_queue_size("rate_ack"),
     lager:debug("LASPVIN received ack from ~p Store ~p ~n", [From, Store]),
+    ets:update_counter(msg_counter, "check_tonode", {3, 1}),
     lager:error("Received check_tonode From:~p for ToNode:~p Hop:~p ~n", [From, ToNode, Hop]),
     case lists:member([ToNode],ets:match(find_sub_aq, {'_', '$1', '_', '_'})) of
         true ->
             %[[ExistHop]] =  ets:match(find_sub_aq, {'_', ToNode, '_', '$1'}),
             case Hop < lists:min(lists:flatten(ets:match(find_sub_aq, {'_', ToNode, '_', '$1'}))) of
                 true ->
+                    ets:update_counter(msg_counter, "check_tonode_ack", {2, 1}),
                     ?SYNC_BACKEND:send(?MODULE, {check_tonode_ack, ToNode, Hop, lasp_support:mynode()}, From);
                 false ->
+                    ets:update_counter(msg_counter, "check_tonode_ack", {2, 1}),
                     ?SYNC_BACKEND:send(?MODULE, {check_tonode_ack, ToNode, 100000, lasp_support:mynode()}, From)
             end;
         false ->
+            ets:update_counter(msg_counter, "check_tonode_ack", {2, 1}),
             ?SYNC_BACKEND:send(?MODULE, {check_tonode_ack, ToNode, Hop, lasp_support:mynode()}, From)
     end,
     {noreply, State};
@@ -455,6 +470,7 @@ handle_cast({check_tonode, ToNode, Hop, From}, #state{store=Store}=State) ->
 handle_cast({check_tonode_ack, ToNode, Act, From}, #state{store=Store}=State) ->
     lasp_marathon_simulations:log_message_queue_size("rate_ack"),
     lager:debug("LASPVIN received ack for check_tonode from ~p Store ~p ~n", [From, Store]),
+    ets:update_counter(msg_counter, "check_tonode_ack", {3, 1}),
     lager:error("Received check_tonode_ack From:~p for ToNode:~p Act is:~p ~n", [From, ToNode, Act]),
     %TO BE DONE!!!!,
     lager:error("checking temp_tonode ~p ~n", [ets:tab2list(temp_tonode)]),
@@ -477,6 +493,7 @@ handle_cast({check_tonode_ack, ToNode, Act, From}, #state{store=Store}=State) ->
                                     ets:delete(peer_rates, "subscription"),
                                     ets:insert(rate_ack, [{"NoSub", 0}]),
                                     lager:error("Sending sub_cancel to ~p as was subscribed for this tonode ~p only ~n", [Fsub, FId]),
+                                    ets:update_counter(msg_counter, "sub_cancel", {2, 1}),
                                     ?SYNC_BACKEND:send(?MODULE, {sub_cancel, lasp_support:mynode(), FId, TempToNode}, Fsub)
                             end;
                         false ->
@@ -492,6 +509,7 @@ handle_cast({sub_cancel, From, Id, ToNode}, #state{store=Store}=State) ->
     lasp_marathon_simulations:log_message_queue_size("rate_ack"),
     lager:debug("LASPVIN received node_cancel from ~p Store ~p ~n", [From, Store]),
     lager:error("Received sub_cancel From:~p for Id:~p ~n", [From, Id]),
+    ets:update_counter(msg_counter, "sub_cancel", {3, 1}),
     case ets:member(c1, "subscriber") of
         true ->
             case lists:member(From, ets:lookup_element(c1, "subscriber", 2)) of
@@ -508,6 +526,7 @@ handle_cast({sub_cancel, From, Id, ToNode}, #state{store=Store}=State) ->
                                         lager:error("End of sub_cancel chain ~p");
                                     false ->
                                         [[ForwardCancelTo]] = ets:match(find_sub_aq, {Id, ToNode, '$1','_'}),
+                                        ets:update_counter(msg_counter, "sub_cancel", {2, 1}),
                                         ?SYNC_BACKEND:send(?MODULE, {sub_cancel, lasp_support:mynode(), Id, ToNode}, ForwardCancelTo)
                             end
                     end;
@@ -524,6 +543,7 @@ handle_cast({rate_class, From, Rate}, #state{store=Store}=State) ->
     lasp_marathon_simulations:log_message_queue_size("rate_class"),
 
     ?CORE:receive_delta(Store, {rate_class, From, Rate}),
+    ets:update_counter(msg_counter, "rate_class", {3, 1}),
     lager:debug("LASPVIN received rate_class From:~p rate:~p Store:~p", [From, Rate, Store]),
     case ets:member(peer_rates, From) of
        true -> 
@@ -560,8 +580,8 @@ handle_cast({rate_class, From, Rate}, #state{store=Store}=State) ->
 handle_cast({rate_subscribe, From, Rate}, #state{store=Store}=State) ->
     lasp_marathon_simulations:log_message_queue_size("rate_subscribe"),
 
-    ?CORE:receive_delta(Store, {rate_class, From, Rate}),
     lager:debug("LASPVIN received rate_subscribe From:~p rate:~p Store:~p", [From, Rate, Store]),
+    ets:update_counter(msg_counter, "rate_subscribe", {3, 1}),
     lager:error("Received rate_subscribe from ~p for rate ~p ~n", [From, Rate]),
     case Rate of
              "c1" -> 
@@ -590,6 +610,7 @@ handle_cast({rate_subscribe, From, Rate}, #state{store=Store}=State) ->
                  end
     end,
     ?SYNC_BACKEND:send(?MODULE, {rate_subscribe_ack, lasp_support:mynode(), Rate}, From),
+    ets:update_counter(msg_counter, "rate_subscribe_ack", {2, 1}),
     lager:debug("LASPVIN c1 list: ~p ~n", [ets:tab2list(c1)]),
     lager:debug("LASPVIN c2 list: ~p ~n", [ets:tab2list(c2)]),
     lager:debug("LASPVIN c3 list: ~p ~n", [ets:tab2list(c3)]),
@@ -598,6 +619,7 @@ handle_cast({rate_subscribe, From, Rate}, #state{store=Store}=State) ->
 handle_cast({rate_subscribe_ack, From, Rate}, #state{store=Store}=State) ->
     lager:debug("LASPVIN received rate_subscribe_ack From:~p rate:~p Store:~p", [From, Rate, Store]),
     lager:error("Rate_subscribe_ack received from ~p for rate ~p ~n", [From, Rate]),
+    ets:update_counter(msg_counter, "rate_subscribe_ack", {3, 1}),
     ets:insert(peer_rates, [{"subscription", From}]),
     ets:delete(rate_ack, "NoSub"),
     {noreply, State};
@@ -605,6 +627,7 @@ handle_cast({rate_subscribe_ack, From, Rate}, #state{store=Store}=State) ->
 handle_cast({rate_refresh, From}, #state{store=Store}=State) ->
     lager:debug("LASPVIN received rate_refresh From:~p Store:~p", [From, Store]),
     lager:error("Received rate refresh request from ~p for rate ~p ~n", [From]),
+    ets:update_counter(msg_counter, "rate_refresh", {3, 1}),
     case ets:member(rate_ack, From) of
         true -> ets:delete(rate_ack, From);
         false -> ok
@@ -706,6 +729,7 @@ handle_info(rate_info, #state{store=Store}=State) ->
                            true -> ok;
                            false -> 
                                lager:error("Sending rate ~p to ~p ~n", [ets:lookup_element(peer_rates, "self_rate", 2), Peer]),
+                               ets:update_counter(msg_counter, "rate_class", {2, 1}),
                                ?SYNC_BACKEND:send(?MODULE, {rate_class, lasp_support:mynode(), ets:lookup_element(peer_rates, "self_rate", 2)}, Peer)
                         end
                   end, 
@@ -773,6 +797,7 @@ handle_info(batched_control_msgs, #state{store=Store}=State) ->
            %lager:error("Sending find_sub control message from batch ~p ~p ~p ~p ~p ~n", [From, Rate, Id, Hop, Peer]),
            %[From, Rate, Id, Hop, Peer] = fs_msg,
            ?SYNC_BACKEND:send(?MODULE, {find_sub, From, Rate, Id, Hop}, Peer),
+           ets:update_counter(msg_counter, "find_sub", {2, 1}),
            lager:error("Sent find_sub control message from batch ~p ~p ~p ~p ~p ~n", [From, Rate, Id, Hop, Peer]),
            ets:delete_object(control_batch_find_sub, {From, Rate, Id, Hop, Peer})
         end, ets:match(control_batch_find_sub, {'$1', '$2', '$3', '$4', '$5'})),
@@ -781,6 +806,7 @@ handle_info(batched_control_msgs, #state{store=Store}=State) ->
         fun([Id, ToNode, Via, From, Hop, Peer]) ->
             %[Id, ToNode, Via, From, Hop, Peer] = batch_msg,
             ?SYNC_BACKEND:send(?MODULE, {find_sub_aq, Id, ToNode, Via, From, Hop}, Peer),
+            ets:update_counter(msg_counter, "find_sub_aq", {2, 1}),
             lager:error("Sent find_sub_aq control message for ~p ~p ~p ~p ~p ~p ~n", [Id, ToNode, Via, From, Hop, Peer]),
             ets:delete_object(control_batch_find_sub_aq, {Id, ToNode, Via, From, Hop, Peer})
         end, ets:match(control_batch_find_sub_aq, {'$1', '$2', '$3', '$4', '$5', '$6'})),
@@ -1036,6 +1062,7 @@ check_subscription() ->
                     ets:delete_all_objects(myconnections),
                     ets:insert(rate_ack, [{"NoSub", 0}]),
                     lists:foreach(fun(Peer) ->
+                        ets:update_counter(msg_counter, "rate_refresh", {2, 1}),
                         ?SYNC_BACKEND:send(?MODULE, {rate_refresh, lasp_support:mynode()}, Peer)
                     end, get_connections());
                 false -> ok
@@ -1053,6 +1080,7 @@ check_subscription() ->
                          true -> 
                             lager:error("Sending Subscription to ~p case1 ~n", [lists:nth(1, ets:lookup_element(c1, "peer", 2))]),
                             %ets:insert(peer_rates, [{"subscription", lists:nth(1, ets:lookup_element(c1, "peer", 2))}]), 
+                            ets:update_counter(msg_counter, "rate_subscribe", {2, 1}),
                             ?SYNC_BACKEND:send(?MODULE, {rate_subscribe, lasp_support:mynode(), ets:lookup_element(peer_rates, "self_rate", 2)}, lists:nth(1, ets:lookup_element(c1, "peer", 2)));
                          false -> 
                             lager:debug("LASPVIN no peer to subscribe Case 1 ~n ")
@@ -1062,12 +1090,14 @@ check_subscription() ->
                          true ->  
                             lager:error("Sending Subscription to ~p case2 ~n", [lists:nth(1, ets:lookup_element(c2, "peer", 2))]),
                             %ets:insert(peer_rates, [{"subscription", lists:nth(1, ets:lookup_element(c2, "peer", 2))}]), 
+                            ets:update_counter(msg_counter, "rate_subscribe", {2, 1}),
                             ?SYNC_BACKEND:send(?MODULE, {rate_subscribe, lasp_support:mynode(), ets:lookup_element(peer_rates, "self_rate", 2)}, lists:nth(1, ets:lookup_element(c2, "peer", 2)));
                          false ->
                             case ets:member(c1, "peer") of
                                true ->
                                    lager:error("Sending Subscription to ~p case3 ~n", [lists:nth(1, ets:lookup_element(c1, "peer", 2))]),
                                    %ets:insert(peer_rates, [{"subscription", lists:nth(1, ets:lookup_element(c1, "peer", 2))}]),
+                                   ets:update_counter(msg_counter, "rate_subscribe", {2, 1}),
                                    ?SYNC_BACKEND:send(?MODULE, {rate_subscribe, lasp_support:mynode(), ets:lookup_element(peer_rates, "self_rate", 2)}, lists:nth(1, ets:lookup_element(c1, "peer", 2)));
                                false -> lager:debug("LASPVIN no peer to subscribe case 2 ~n")
                             end
@@ -1078,6 +1108,7 @@ check_subscription() ->
                    true -> 
                        lager:error("Sending Subscription to ~p case4 ~n", [lists:nth(1, ets:lookup_element(c1, "peer", 2))]),
                        %ets:insert(peer_rates, [{"subscription", lists:nth(1, ets:lookup_element(c1, "peer", 2))}]),
+                       ets:update_counter(msg_counter, "rate_subscribe", {2, 1}),
                        ?SYNC_BACKEND:send(?MODULE, {rate_subscribe, lasp_support:mynode(), ets:lookup_element(peer_rates, "self_rate", 2)}, lists:nth(1, ets:lookup_element(c1, "peer", 2)));
                    false ->
                       case ets:member(find_sub, ets:lookup_element(peer_rates, "self_rate", 2)) of
@@ -1413,6 +1444,7 @@ forward_aq_lock(Id, ToNode, From) ->
                 false ->
                     %pass on the lock & delete find_sub_aq entry
                     lager:error("LASPVIN Forwarding lock for ID:~p to ~p ~n", [Id, ets:lookup_element(find_sub_aq, Id, 3)]),
+                    ets:update_counter(msg_counter, "find_sub_aq_lock", {2, 1}),
                     ?SYNC_BACKEND:send(?MODULE, {find_sub_aq_lock, Id, ToNode, lasp_support:mynode()}, lists:nth(1,lists:nth(1,ets:match(find_sub_aq, {Id, ToNode, '$1', '_'}))))
                     %ets:delete(find_sub_aq, Id)
     end.
@@ -1513,6 +1545,7 @@ check_with_subscription(ToNode, Hop, Id, Via, From) ->
                     ets:delete(temp_tonode, ToNode),
                     lager:error("Temp_tonode existed deleted existing as got lower hop ~n"),
                     ets:insert(temp_tonode, [{ToNode, Hop, Id, Via, From}]),
+                    ets:update_counter(msg_counter, "check_tonode", {2, 1}),
                     ?SYNC_BACKEND:send(?MODULE, {check_tonode, ToNode, Hop, lasp_support:mynode()}, ets:lookup_element(peer_rates, "subscription", 2));
                 false ->
                     lager:error("Temp_tonode existed but hop>existing so skipping.. ~n"),
@@ -1520,6 +1553,7 @@ check_with_subscription(ToNode, Hop, Id, Via, From) ->
             end;
         false ->
             ets:insert(temp_tonode, [{ToNode, Hop, Id, Via, From}]),
+            ets:update_counter(msg_counter, "check_tonode", {2, 1}),
             ?SYNC_BACKEND:send(?MODULE, {check_tonode, ToNode, Hop, lasp_support:mynode()}, ets:lookup_element(peer_rates, "subscription", 2))
     end.
 
@@ -1550,6 +1584,7 @@ send_lock(Id, ToNode, Via, Hop, From) ->
             lager:error("LASPVIN Connections: ~p", [get_connections()]),
             ets:insert(c1, [{"pseudopeer", ToNode, Hop, From, Id}]),
             lager:error("Sending Lock for Id ~p, ToNode:~p to ~p ~n", [Id, ToNode, From]),
+            ets:update_counter(msg_counter, "find_sub_aq_lock", {2, 1}),
             ?SYNC_BACKEND:send(?MODULE, {find_sub_aq_lock, Id, ToNode, lasp_support:mynode()}, From)
     end.
 
