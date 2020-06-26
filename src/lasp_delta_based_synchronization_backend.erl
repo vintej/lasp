@@ -813,7 +813,7 @@ get_members(ListToGet) ->
     ets:tab2list(ListToGet).
 
 incSendBackEnd() ->
-    ets:update_counter(rate_ack, "send_backend", {2, 1}).
+    ets:update_counter(msg_counter, "send_backend", {2, 1}).
 
 
 %% @private
