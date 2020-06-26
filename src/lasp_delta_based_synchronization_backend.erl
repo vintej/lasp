@@ -105,7 +105,7 @@ init([Store, Actor]) ->
     ?SYNC_BACKEND:seed(),
     
     ets:new(peer_rates, [ordered_set, named_table, public]),
-    ets:insert(peer_rates, [{"self_rate", os:getenv("RATE_CLASS", "c1")}]),
+    ets:insert(peer_rates, [{"self_rate", os:getenv("RATE_CLASS", "c1")}, {"RATE_C1", os:getenv("RATE_C1", 5000)}, {"RATE_C2", os:getenv("RATE_C2", 22500)}, {"RATE_C3", os:getenv("RATE_C3", 45500)}]),
     ets:new(msg_counter, [ordered_set, named_table, public]),
     ets:insert(msg_counter, [{"Message", "Tx", "Rx"},{"delta_send", 0, 0}, {"delta_ack", 0, 0}, {"rate_class", 0, 0}, {"rate_ack", 0, 0}, {"rate_subscribe", 0, 0}, {"rate_subscribe_ack", 0, 0} 
         , {"rate_refresh", 0, 0}, {"find_sub", 0, 0}, {"find_sub_aq", 0, 0}, {"find_sub_aq_lock", 0, 0}, {"check_tonode", 0, 0}, {"check_tonode_ack", 0, 0}, {"sub_cancel", 0, 0}, {"send_backend", 0, 0}]), 
@@ -990,21 +990,21 @@ schedule_rate_propagation_c1() ->
     lager:debug("LASPVIN rate_propagation_c1"),
     lager:error("C1 propagation ~p ~n", [time_stamp()]),
     %5000 milliseconds is 5 seconds
-    timer:send_after(5000, rate_prop_c1).
+    timer:send_after(ets:lookup_element(peer_rates, "RATE_C1", 2), rate_prop_c1).
 
 %% @private
 schedule_rate_propagation_c2() ->
     lager:debug("LASPVIN rate_propagation_c2"),
     lager:error("C2 propagation ~p ~n", [time_stamp()]),
     %22500 milliseconds is 22.5 seconds
-    timer:send_after(22500, rate_prop_c2).
+    timer:send_after(ets:lookup_element(peer_rates, "RATE_C2", 2), rate_prop_c2).
 
 %% @private
 schedule_rate_propagation_c3() ->
     lager:debug("LASPVIN rate_propagation_c3"),
     lager:error("C3 propagation ~p ~n", [time_stamp()]),
     %45500 milliseconds is 45.5 seconds
-    timer:send_after(45500, rate_prop_c3).
+    timer:send_after(ets:lookup_element(peer_rates, "RATE_C3", 2), rate_prop_c3).
 
 schedule_batched_control_messages() ->
     lager:debug("LASPVIN sending batched messages"),
