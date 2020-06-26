@@ -315,6 +315,7 @@ handle_cast({find_sub_aq_lock, Id, ToNode, From}, #state{store=Store}=State) ->
 
 handle_cast({find_sub_aq_lock_rev, Id, From}, #state{store=Store}=State) ->
     lasp_marathon_simulations:log_message_queue_size("find_sub_aq_lock_rev"),
+    %test comment
     lager:debug("LASPVIN Store ~p ~n",[Store]),
     lager:error("LASPVIN received find_sub_aq_lock_rev for Id:~p From:~p ~n", [Id, From]),
     case ets:lookup_element(peer_rates, "self_rate", 2)==lists:nth(1,lists:nth(1,ets:match(find_sub, {'$1',Id, '_', '_' }))) of
