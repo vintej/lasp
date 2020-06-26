@@ -132,6 +132,7 @@ send(Mod, Msg, Peer) ->
     PeerServiceManager = lasp_config:peer_service_manager(),
     case PeerServiceManager:cast_message(Peer, Mod, Msg) of
         ok ->
+            lasp_delta_based_synchronization_backend:incSendBackEnd(),
             ok;
         _Error ->
             % lager:error("Failed send to ~p for reason ~p", [Peer, Error]),

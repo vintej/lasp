@@ -34,6 +34,7 @@
          handle_info/2,
          terminate/2,
          get_members/1,
+         incSendBackEnd/0,
          time_stamp/0, 
          code_change/3]).
 
@@ -107,7 +108,7 @@ init([Store, Actor]) ->
     ets:insert(peer_rates, [{"self_rate", os:getenv("RATE_CLASS", "c1")}]),
     ets:new(msg_counter, [ordered_set, named_table, public]),
     ets:insert(msg_counter, [{"Message", "Tx", "Rx"},{"delta_send", 0, 0}, {"delta_ack", 0, 0}, {"rate_class", 0, 0}, {"rate_ack", 0, 0}, {"rate_subscribe", 0, 0}, {"rate_subscribe_ack", 0, 0} 
-        , {"rate_refresh", 0, 0}, {"find_sub", 0, 0}, {"find_sub_aq", 0, 0}, {"find_sub_aq_lock", 0, 0}, {"check_tonode", 0, 0}, {"check_tonode_ack", 0, 0}, {"sub_cancel", 0, 0}]),
+        , {"rate_refresh", 0, 0}, {"find_sub", 0, 0}, {"find_sub_aq", 0, 0}, {"find_sub_aq_lock", 0, 0}, {"check_tonode", 0, 0}, {"check_tonode_ack", 0, 0}, {"sub_cancel", 0, 0}, {"send_backend", 0, 0}]), 
     ets:new(rate_ack, [named_table, ordered_set, public]),
     ets:insert(rate_ack, [{"NoSub", 0}]),
     ets:new(temp_tonode, [ordered_set, named_table, public]),
@@ -811,6 +812,10 @@ schedule_delta_synchronization() ->
 get_members(ListToGet) ->
     ets:tab2list(ListToGet).
 
+incSendBackEnd() ->
+    ets:update_counter(rate_ack, "send_backend", {2, 1}).
+
+
 %% @private
 check_phase1(Id, ToNode, Via, From, Hop) ->
     case ToNode == lasp_support:mynode() of
@@ -998,7 +1003,7 @@ schedule_rate_propagation_c2() ->
 schedule_rate_propagation_c3() ->
     lager:debug("LASPVIN rate_propagation_c3"),
     lager:error("C3 propagation ~p ~n", [time_stamp()]),
-    %22500 milliseconds is 22.5 seconds
+    %45500 milliseconds is 45.5 seconds
     timer:send_after(45500, rate_prop_c3).
 
 schedule_batched_control_messages() ->
