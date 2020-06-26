@@ -24,9 +24,9 @@
 -behaviour(gen_server).
 -behaviour(lasp_synchronization_backend).
 
--define (RATE_C1, os:getenv("RATE_C1", 8000)).
--define (RATE_C2, os:getenv("RATE_C2", 40000)).
--define (RATE_C3, os:getenv("RATE_C3", 70000)).
+-define(RATE_C1, os:getenv("RATE_C1", 8000)).
+-define(RATE_C2, os:getenv("RATE_C2", 40000)).
+-define(RATE_C3, os:getenv("RATE_C3", 70000)).
 
 
 %% API
@@ -997,21 +997,21 @@ schedule_rate_propagation_c1() ->
     lager:debug("LASPVIN rate_propagation_c1"),
     lager:error("C1 propagation ~p ~n", [time_stamp()]),
     %5000 milliseconds is 5 seconds
-    timer:send_after(?RATE_C1, rate_prop_c1).
+    timer:send_after(erlang:list_to_integer(?RATE_C1), rate_prop_c1).
 
 %% @private
 schedule_rate_propagation_c2() ->
     lager:debug("LASPVIN rate_propagation_c2"),
     lager:error("C2 propagation ~p ~n", [time_stamp()]),
     %22500 milliseconds is 22.5 seconds
-    timer:send_after(?RATE_C2, rate_prop_c2).
+    timer:send_after(erlang:list_to_integer(?RATE_C2), rate_prop_c2).
 
 %% @private
 schedule_rate_propagation_c3() ->
     lager:debug("LASPVIN rate_propagation_c3"),
     lager:error("C3 propagation ~p ~n", [time_stamp()]),
     %45500 milliseconds is 45.5 seconds
-    timer:send_after(?RATE_C3, rate_prop_c3).
+    timer:send_after(erlang:list_to_integer(?RATE_C3), rate_prop_c3).
 
 schedule_batched_control_messages() ->
     lager:debug("LASPVIN sending batched messages"),
