@@ -240,7 +240,8 @@ handle_cast({delta_send, From, {Id, Type, _Metadata, Deltas}, Counter},
                                                ?CLOCK_INIT(Actor)})
              end),
     lasp_logger:extended("Receiving delta took: ~p microseconds.", [Time]),
-    lager:error("LASPVIN Received delta From=~p at TimeStamp=~p Took=~p microseconds Id:~p Type:~p _Metadata:~p Deltas:~p ~n", [From, time_stamp(), Time, Id, Type, _Metadata, Deltas]),
+    {ok, DeltaVal} = lasp:query(Id),
+    lager:error("LASPVIN Received delta From=~p at TimeStamp=~p Took=~p microseconds DeltaVal:~p ~n", [From, time_stamp(), Time, DeltaVal]),
     ets:update_counter(msg_counter, "delta_send", {3, 1}),
     lager:error("Message Counters ~p ~n", [ets:tab2list(msg_counter)]),
 
