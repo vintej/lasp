@@ -147,6 +147,7 @@ handle_cast({delta_exchange, Peer, ObjectFilterFun},
                     true ->
                         lager:error("LASPVIN Sending delta to ~p at ~p ~n", [Peer, time_stamp()]),
                         ets:update_counter(msg_counter, "delta_send", {2, 1}),
+			lager:error("Id: ~p Type: ~p Metadata: ~p Deltas: ~p Counter:~p ~n", [Id, Type, Metadata, Deltas, Counter]),
                         ?SYNC_BACKEND:send(?MODULE, {delta_send, lasp_support:mynode(), {Id, Type, Metadata, Deltas}, Counter}, Peer),
 
                         orddict:map(
