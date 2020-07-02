@@ -79,7 +79,7 @@ init([Store, Actor]) ->
     %% Seed the process at initialization.
     ?SYNC_BACKEND:seed(),
     ets:new(msg_counter, [ordered_set, named_table, public]),
-    ets:insert(msg_counter, [{"Message", "Tx", "Rx"}, {"send_backend", 0, 0}]), 
+    ets:insert(msg_counter, [{"Message", "Tx", "Rx"},{"delta_send", 0, 0}, {"delta_ack", 0, 0}, {"send_backend", 0, 0}]), 
 
     schedule_delta_synchronization(),
     schedule_delta_garbage_collection(),
@@ -146,6 +146,7 @@ handle_cast({delta_exchange, Peer, ObjectFilterFun},
                 AckMap = case Ack < Counter orelse ClientInReactiveMode of
                     true ->
                         lager:error("LASPVIN Sending delta to ~p at ~p ~n", [Peer, time_stamp()]),
+                        ets:update_counter(msg_counter, "delta_send", {2, 1}),
                         ?SYNC_BACKEND:send(?MODULE, {delta_send, lasp_support:mynode(), {Id, Type, Metadata, Deltas}, Counter}, Peer),
 
                         orddict:map(
@@ -190,10 +191,13 @@ handle_cast({delta_send, From, {Id, Type, _Metadata, Deltas}, Counter},
     lasp_logger:extended("Receiving delta took: ~p microseconds.", [Time]),
     {ok, DeltaVal} = lasp:query(Id),
     lager:error("LASPVIN Received delta From=~p at TimeStamp=~p microseconds=~p DeltaVal:~p ~n", [From, time_stamp(), Time, DeltaVal]),
+    ets:update_counter(msg_counter, "delta_send", {3, 1}),
+    ets:update_counter(msg_counter, "delta_ack", {2, 1}),
     lager:error("Message Counters ~p ~n", [ets:tab2list(msg_counter)]),
 
     %% Acknowledge message.
     ?SYNC_BACKEND:send(?MODULE, {delta_ack, lasp_support:mynode(), Id, Counter}, From),
+    
 
     %% Send back just the updated state for the object received.
     case ?SYNC_BACKEND:client_server_mode() andalso
@@ -211,6 +215,7 @@ handle_cast({delta_send, From, {Id, Type, _Metadata, Deltas}, Counter},
 
 handle_cast({delta_ack, From, Id, Counter}, #state{store=Store}=State) ->
     lasp_marathon_simulations:log_message_queue_size("delta_ack"),
+    ets:update_counter(msg_counter, "delta_ack", {3, 1}),
 
     ?CORE:receive_delta(Store, {delta_ack, Id, From, Counter}),
     {noreply, State};
