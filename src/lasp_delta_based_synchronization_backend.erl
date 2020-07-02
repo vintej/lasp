@@ -132,8 +132,8 @@ init([Store, Actor]) ->
     schedule_delta_garbage_collection(),
     schedule_rate_class_info_propagation(),
     schedule_rate_propagation_c1(),
-    schedule_rate_propagation_c2(),
-    schedule_rate_propagation_c3(),
+    %schedule_rate_propagation_c2(),
+    %schedule_rate_propagation_c3(),
     schedule_batched_control_messages(),
 
     {ok, #state{actor=Actor, gossip_peers=[], store=Store}}.
@@ -1022,16 +1022,26 @@ schedule_batched_control_messages() ->
 
 %% @private
 propagate_by_class(Class, Sub) ->
-    lasp_logger:extended("Beginning delta synchronization by class."),
+    lasp_marathon_simulations:log_message_queue_size("delta_sync"),
 
-    
+    lasp_logger:extended("Beginning delta synchronization."),
+
+    %% Get the active set from the membership protocol.
+    {ok, Members} = ?SYNC_BACKEND:membership(),
+
+    %% Remove ourself and compute exchange peers.
+    Peers = ?SYNC_BACKEND:compute_exchange(?SYNC_BACKEND:without_me(Members)),
+
+    lasp_logger:extended("Beginning sync for peers: ~p", [Peers]),
+    lager:error("lllalalala ~p ~n", [get_subscribers(Class, Sub)]),
+
     %% Ship buffered updates for the fanout value.
     FilterWithoutConvergenceFun = fun(Id, _) ->
                               Id =/= ?SIM_STATUS_STRUCTURE
                       end,
     lists:foreach(fun(Peer) ->
                           init_delta_sync(Peer, FilterWithoutConvergenceFun) end,
-                  get_subscribers(Class, Sub)),
+                  Peers),
 
     %% Synchronize convergence structure.
     FilterWithConvergenceFun = fun(Id, _) ->
@@ -1039,7 +1049,28 @@ propagate_by_class(Class, Sub) ->
                       end,
     lists:foreach(fun(Peer) ->
                           init_delta_sync(Peer, FilterWithConvergenceFun) end,
-                  get_subscribers(Class, Sub)).
+                  ?SYNC_BACKEND:without_me(Members)).
+
+    %% Schedule next synchronization.
+    %schedule_delta_synchronization(),
+    %lasp_logger:extended("Beginning delta synchronization by class."),
+
+    
+    %% Ship buffered updates for the fanout value.
+    %FilterWithoutConvergenceFun = fun(Id, _) ->
+    %                          Id =/= ?SIM_STATUS_STRUCTURE
+    %                  end,
+    %lists:foreach(fun(Peer) ->
+    %                      init_delta_sync(Peer, FilterWithoutConvergenceFun) end,
+    %              get_subscribers(Class, Sub)),
+
+    %% Synchronize convergence structure.
+    %FilterWithConvergenceFun = fun(Id, _) ->
+    %                          Id =:= ?SIM_STATUS_STRUCTURE
+    %                  end,
+    %lists:foreach(fun(Peer) ->
+    %                      init_delta_sync(Peer, FilterWithConvergenceFun) end,
+    %              get_subscribers(Class, Sub)).
 
 %% @private
 get_subscribers(Class, Sub) ->
