@@ -1088,6 +1088,9 @@ check_subscription() ->
                     lager:error("Refreshing peer_rates ~n"),
                     ets:delete_all_objects(rate_ack),
                     ets:delete_all_objects(myconnections),
+                    ets:delete(c1, "peer"),
+                    ets:delete(c2, "peer"),
+                    ets:delete(c3, "peer"),
                     %ets:delete(peer_rates, "subscription"),
                     ets:insert(rate_ack, [{"NoSub", 0}]),
                     lists:foreach(fun(Peer) ->
