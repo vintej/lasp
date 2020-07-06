@@ -701,7 +701,10 @@ handle_info(rate_prop_c1, #state{store=Store}=State) ->
     lager:debug("LASPVIN Store: ~p State:~p ~n", [Store, State]),
     case ets:member(c1, "peer") of
         true -> 
-            propagate_by_class(c1, "peer");
+            case ets:lookup_element(peer_rates, "self_rate", 2) == "c1" of
+                true -> propagate_by_class(c1, "peer");
+                false -> ok
+            end;
             %propagate_by_class(c1, "subscriber");
         false -> lager:debug("LASPVIN no c1 peers for propagation")
     end,
@@ -1080,12 +1083,18 @@ check_subscription() ->
     case ets:member(rate_ack, "NoSub") of
         true ->
             ets:update_counter(rate_ack, "NoSub", {2, 1}),
-            case ets:lookup_element(rate_ack, "NoSub", 2) > 60 of
+            case ets:lookup_element(rate_ack, "NoSub", 2) > 24 of
                 true ->
+                    lager:error("Refreshing peer_rates ~n"),
                     ets:delete_all_objects(rate_ack),
                     ets:delete_all_objects(myconnections),
+                    %ets:delete(peer_rates, "subscription"),
                     ets:insert(rate_ack, [{"NoSub", 0}]),
                     lists:foreach(fun(Peer) ->
+                        case ets:member(peer_rates, Peer) of
+                            true -> ets:delete(peer_rates, Peer);
+                            false -> ok
+                        end,
                         ets:update_counter(msg_counter, "rate_refresh", {2, 1}),
                         ?SYNC_BACKEND:send(?MODULE, {rate_refresh, lasp_support:mynode()}, Peer)
                     end, get_connections());
